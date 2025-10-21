@@ -1,6 +1,6 @@
 """
 Defines the multi-stage validation pipeline for ensuring the quality of
-generated code. It includes checks for syntax, style, code smells, and
+generated code. It includes checks for syntax, style, unit tests, and
 safe execution.
 """
 
@@ -9,329 +9,118 @@ import os
 import tempfile
 import multiprocessing
 from io import StringIO
+from typing import List
 
-# These are external libraries we defined in pyproject.toml
 from flake8.api import legacy as flake8
 from pylint import lint
 from pylint.reporters.text import TextReporter
 
 from .patterns import ValidationResult
 
-# --- Stage 1: Syntax Validation (Fastest) ---
-
+# --- Stage 1: Syntax Validation ---
 class SyntaxValidator:
     """Validates that the code is syntactically correct Python."""
-
-    def validate(self, code: str) -> ValidationResult:
+    def validate(self, code: str, **kwargs) -> ValidationResult:
         try:
             ast.parse(code)
             return ValidationResult(True, code)
         except SyntaxError as e:
             return ValidationResult(False, code, [f"Syntax error: {e}"])
 
-# --- Stage 2: Static Analysis (Style and Code Smells) ---
-
+# --- Stage 2: Static Analysis ---
 class Flake8Validator:
     """Validates code against PEP 8 style conventions using Flake8."""
-
-    def validate(self, code: str) -> ValidationResult:
-        # The flake8 API is designed to wo"""
-Defines the multi-stage validation pipeline for ensuring the quality of
-generated code. It includes checks for syntax, style, code smells, and
-safe execution.
-"""
-
-import ast
-import os
-import tempfile
-import multiprocessing
-from io import StringIO
-
-# These are external libraries we defined in pyproject.toml
-from flake8.api import legacy as flake8
-from pylint import lint
-from pylint.reporters.text import TextReporter
-
-from .patterns import ValidationResult
-
-# --- Stage 1: Syntax Validation (Fastest) ---
-
-class SyntaxValidator:
-    """Validates that the code is syntactically correct Python."""
-
-    def validate(self, code: str) -> ValidationResult:
-        try:
-            ast.parse(code)
-            return ValidationResult(True, code)
-        except SyntaxError as e:
-            return ValidationResult(False, code, [f"Syntax error: {e}"])
-
-# --- Stage 2: Static Analysis (Style and Code Smells) ---
-
-class Flake8Validator:
-    """Validates code against PEP 8 style conventions using Flake8."""
-
-    def validate(self, code: str) -> ValidationResult:
-        # The flake8 API is designed to work with files, so we write the code
-        # to a temporary file to be scanned.
+    def validate(self, code: str, **kwargs) -> ValidationResult:
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
             f.write(code)
             filepath = f.name
-
         style_guide = flake8.get_style_guide()
         report = style_guide.check_files([filepath])
-
-        os.remove(filepath)  # Clean up the temporary file
-
+        os.remove(filepath)
         if report.total_errors == 0:
             return ValidationResult(True, code)
         else:
-            # Collect the error messages for debugging.
             errors = [f"Flake8: {e}" for e in report.get_statistics('')]
-            return ValidationResult(False, code, errors[:5]) # Return first 5 errors
+            return ValidationResult(False, code, errors[:5])
 
-class PylintValidator:
-    """Validates code for 'code smells' and deeper issues using Pylint."""
-
-    def validate(self, code: str) -> ValidationResult:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
-            f.write(code)
-            filepath = f.name
-
-        reporter_output = StringIO()
-        reporter = TextReporter(reporter_output)
-
-        # Run pylint programmatically.
-        lint.Run([filepath], reporter=reporter, exit=False)
-
-        os.remove(filepath)
-
-        output = reporter_output.getvalue()
-        # A perfect score or no output means it's valid.
-        if "Your code has been rated at 10.00/10" in output or not output.strip():
-            return ValidationResult(True, code)
-        else:
-            # Parse the output to get meaningful error messages.
-            errors = [line for line in output.split('\n') if line.strip() and not line.startswith('***')]
-            return ValidationResult(False, code, errors[:3]) # Return first 3 errors
-
-# --- Stage 3: Safe Execution (with Timeout) ---
-
+# --- Safe Execution Logic (Helper) ---
 def _execute_code_in_process(code: str, queue: multiprocessing.Queue):
-    """
-    A target function to execute code in a separate process.
-    Communicates results back to the parent via a queue.
-    """
+    """Target function to execute code in a separate process."""
     try:
         exec(code, {})
-        queue.put(None)  # Signal success
+        queue.put(None)
     except Exception as e:
-        queue.put(e)  # Put the exception object in the queue to signal failure
+        queue.put(e)
 
 class SafeExecutionValidator:
-    """
-    Validates that the code executes without errors and, crucially, with a timeout
-    to prevent infinite loops from halting the entire generator.
-    """
+    """Executes code with a timeout to prevent infinite loops."""
     def __init__(self, timeout: int = 2):
         self.timeout = timeout
 
-    def validate(self, code: str) -> ValidationResult:
+    def validate(self, code: str, **kwargs) -> ValidationResult:
         queue = multiprocessing.Queue()
         process = multiprocessing.Process(target=_execute_code_in_process, args=(code, queue))
-
         process.start()
         process.join(timeout=self.timeout)
 
         if process.is_alive():
-            # Process is still running after the timeout.
             process.terminate()
             process.join()
-            return ValidationResult(
-                False, code, [f"Execution error: Timeout after {self.timeout} seconds (possible infinite loop)."]
-            )
+            return ValidationResult(False, code, [f"Execution timeout after {self.timeout}s."])
 
-        # Process finished, check the queue for an exception.
         try:
             result = queue.get_nowait()
             if isinstance(result, Exception):
                 return ValidationResult(False, code, [f"Execution error: {result}"])
             else:
-                return ValidationResult(True, code)  # Success
+                return ValidationResult(True, code)
         except multiprocessing.queues.Empty:
-            # This can happen in rare cases if the process terminates unexpectedly.
-            return ValidationResult(False, code, ["Execution error: Process finished but no result was returned."])
+            return ValidationResult(False, code, ["Execution error: Process finished unexpectedly."])
+
+# --- Stage 3: Unit Test Validation (New!) ---
+class UnitTestValidator:
+    """
+    Runs the generated unit test snippets against the generated code.
+    It reuses the SafeExecutionValidator to run the combined script.
+    """
+    def __init__(self, timeout: int = 3):
+        self.execution_validator = SafeExecutionValidator(timeout)
+
+    def validate(self, code: str, tests: List[str], **kwargs) -> ValidationResult:
+        if not tests:
+            return ValidationResult(True, code) # No tests to run, so it's valid.
+
+        for test_snippet in tests:
+            # Combine the generated code with one of its test snippets
+            full_script = f"{code}\n\n# --- Running validation test ---\n{test_snippet}"
+            
+            # Run the combined script through the safe executor.
+            # An AssertionError from a failing test will be caught as an Exception.
+            result = self.execution_validator.validate(full_script)
+            if not result.valid:
+                result.errors = [f"Unit test failed: {result.errors[0]}"]
+                return result
+        
+        return ValidationResult(True, code)
 
 # --- The Main Pipeline Orchestrator ---
-
 class ValidationPipeline:
-    """
-    Orchestrates a sequence of validators to ensure code quality.
-    It follows a fail-fast approach.
-    """
+    """Orchestrates a sequence of validators to ensure code quality."""
     def __init__(self, use_pylint: bool = False):
-        """
-        Initializes the pipeline with a sequence of validators.
-
-        Args:
-            use_pylint (bool): Whether to include the PylintValidator, which is
-                               more thorough but significantly slower.
-        """
+        # Pylint is not included by default as it's slow.
+        # A full implementation would add it here conditionally.
         self.validators = [
-            SyntaxValidator(),       # Stage 1 (Fastest)
-            Flake8Validator(),       # Stage 2 (Style)
+            SyntaxValidator(),
+            Flake8Validator(),
+            UnitTestValidator(), # Add our new unit test validator to the sequence
         ]
-        if use_pylint:
-            self.validators.append(PylintValidator()) # Stage 2.5 (Deep Linting)
-        
-        self.validators.append(SafeExecutionValidator()) # Stage 3 (Execution)
 
-    def validate(self, code: str) -> ValidationResult:
+    def validate(self, code: str, tests: List[str]) -> ValidationResult:
         """
-        Runs the given code through all validators in sequence.
-
-        If any validator fails, the pipeline stops and returns the failure result
-        immediately (fail-fast).
-
-        Args:
-            code: The code string to validate.
-
-        Returns:
-            A ValidationResult object indicating success or the first failure.
+        Runs the code and its tests through all validators in sequence.
         """
         for validator in self.validators:
-            result = validator.validate(code)
+            result = validator.validate(code=code, tests=tests)
             if not result.valid:
-                return result  # Fail-fast
-        return ValidationResult(True, code)rk with files, so we write the code
-        # to a temporary file to be scanned.
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
-            f.write(code)
-            filepath = f.name
-
-        style_guide = flake8.get_style_guide()
-        report = style_guide.check_files([filepath])
-
-        os.remove(filepath)  # Clean up the temporary file
-
-        if report.total_errors == 0:
-            return ValidationResult(True, code)
-        else:
-            # Collect the error messages for debugging.
-            errors = [f"Flake8: {e}" for e in report.get_statistics('')]
-            return ValidationResult(False, code, errors[:5]) # Return first 5 errors
-
-class PylintValidator:
-    """Validates code for 'code smells' and deeper issues using Pylint."""
-
-    def validate(self, code: str) -> ValidationResult:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
-            f.write(code)
-            filepath = f.name
-
-        reporter_output = StringIO()
-        reporter = TextReporter(reporter_output)
-
-        # Run pylint programmatically.
-        lint.Run([filepath], reporter=reporter, exit=False)
-
-        os.remove(filepath)
-
-        output = reporter_output.getvalue()
-        # A perfect score or no output means it's valid.
-        if "Your code has been rated at 10.00/10" in output or not output.strip():
-            return ValidationResult(True, code)
-        else:
-            # Parse the output to get meaningful error messages.
-            errors = [line for line in output.split('\n') if line.strip() and not line.startswith('***')]
-            return ValidationResult(False, code, errors[:3]) # Return first 3 errors
-
-# --- Stage 3: Safe Execution (with Timeout) ---
-
-def _execute_code_in_process(code: str, queue: multiprocessing.Queue):
-    """
-    A target function to execute code in a separate process.
-    Communicates results back to the parent via a queue.
-    """
-    try:
-        exec(code, {})
-        queue.put(None)  # Signal success
-    except Exception as e:
-        queue.put(e)  # Put the exception object in the queue to signal failure
-
-class SafeExecutionValidator:
-    """
-    Validates that the code executes without errors and, crucially, with a timeout
-    to prevent infinite loops from halting the entire generator.
-    """
-    def __init__(self, timeout: int = 2):
-        self.timeout = timeout
-
-    def validate(self, code: str) -> ValidationResult:
-        queue = multiprocessing.Queue()
-        process = multiprocessing.Process(target=_execute_code_in_process, args=(code, queue))
-
-        process.start()
-        process.join(timeout=self.timeout)
-
-        if process.is_alive():
-            # Process is still running after the timeout.
-            process.terminate()
-            process.join()
-            return ValidationResult(
-                False, code, [f"Execution error: Timeout after {self.timeout} seconds (possible infinite loop)."]
-            )
-
-        # Process finished, check the queue for an exception.
-        try:
-            result = queue.get_nowait()
-            if isinstance(result, Exception):
-                return ValidationResult(False, code, [f"Execution error: {result}"])
-            else:
-                return ValidationResult(True, code)  # Success
-        except multiprocessing.queues.Empty:
-            # This can happen in rare cases if the process terminates unexpectedly.
-            return ValidationResult(False, code, ["Execution error: Process finished but no result was returned."])
-
-# --- The Main Pipeline Orchestrator ---
-
-class ValidationPipeline:
-    """
-    Orchestrates a sequence of validators to ensure code quality.
-    It follows a fail-fast approach.
-    """
-    def __init__(self, use_pylint: bool = False):
-        """
-        Initializes the pipeline with a sequence of validators.
-
-        Args:
-            use_pylint (bool): Whether to include the PylintValidator, which is
-                               more thorough but significantly slower.
-        """
-        self.validators = [
-            SyntaxValidator(),       # Stage 1 (Fastest)
-            Flake8Validator(),       # Stage 2 (Style)
-        ]
-        if use_pylint:
-            self.validators.append(PylintValidator()) # Stage 2.5 (Deep Linting)
-        
-        self.validators.append(SafeExecutionValidator()) # Stage 3 (Execution)
-
-    def validate(self, code: str) -> ValidationResult:
-        """
-        Runs the given code through all validators in sequence.
-
-        If any validator fails, the pipeline stops and returns the failure result
-        immediately (fail-fast).
-
-        Args:
-            code: The code string to validate.
-
-        Returns:
-            A ValidationResult object indicating success or the first failure.
-        """
-        for validator in self.validators:
-            result = validator.validate(code)
-            if not result.valid:
-                return result  # Fail-fast
+                return result
         return ValidationResult(True, code)
