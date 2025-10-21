@@ -1,91 +1,100 @@
 """
-Defines the CombinatorialCodeGenerator, the core engine for synthesizing code.
+Defines the PLSEGenerator, the core engine for synthesizing code using Jinja2.
 """
 
 import random
 import hashlib
 import autopep8
-from typing import Optional, Tuple, Dict, Set
+from typing import Optional, Tuple, Dict, Any, List
+from jinja2 import Environment, TemplateSyntaxError
 
-# Import our custom pattern definition
-from .patterns import CombinatorialPattern
+# Import our new, schema-aligned pattern definition
+from .patterns import PLSEPattern, Validation
 
-class CombinatorialCodeGenerator:
+class PLSEGenerator:
     """
-    Generates Python code snippets by randomly combining bindings from the
-    pools defined in a CombinatorialPattern.
+    Generates Python code by rendering a PLSEPattern with a dynamically
+    instantiated parameter context using the Jinja2 templating engine.
     """
 
     def __init__(self):
-        self.generated_hashes: Set[str] = set()
+        self.generated_hashes: set[str] = set()
+        self.jinja_env = Environment(
+            trim_blocks=True, lstrip_blocks=True
+        )
 
-    def generate(self, pattern: CombinatorialPattern) -> Optional[Tuple[str, Dict[str, str]]]:
+    def _instantiate_parameters(self, pattern: PLSEPattern) -> Dict[str, Any]:
         """
-        Generates a single, unique code snippet from a given pattern.
+        Generates a concrete set of values from the pattern's parameter schema.
+        """
+        context = {}
+        for name, param in pattern.parameters.items():
+            if param.type == "choice":
+                context[name] = random.choice(param.constraints.get("options", [param.default]))
+            # Future parameter types (e.g., "int", "float") would be handled here.
+            else:
+                context[name] = param.default
+        return context
 
-        This method performs the following steps:
-        1. Creates a new "variant" on the fly by selecting one binding from each pool.
-        2. Prepends the necessary import statements based on the pattern's 'requires' field.
-        3. Substitutes the chosen bindings into the code template.
-        4. Checks for uniqueness to avoid generating duplicates.
-        5. Formats the code using autopep8.
-        6. Returns the final code and the bindings used to create it.
+    def generate(self, pattern: PLSEPattern) -> Optional[Tuple[str, str, List[str]]]:
+        """
+        Generates a single, unique code example from a given pattern.
 
         Args:
-            pattern: The CombinatorialPattern to generate code from.
+            pattern: The PLSEPattern to render.
 
         Returns:
-            A tuple containing the generated code string and the dictionary of
-            bindings used, or None if generation fails (e.g., duplicate or error).
+            A tuple containing:
+            - The final, assembled code string.
+            - The rendered instruction string.
+            - A list of rendered unit test snippet strings.
+            Returns None if generation fails.
         """
-        if not pattern or not pattern.binding_pools:
-            return None
+        # 1. Create a concrete set of parameters for this instance.
+        parameter_context = self._instantiate_parameters(pattern)
 
-        # 1. Assemble a new, random "variant" on the fly.
         try:
-            bindings = {
-                key: random.choice(pool)
-                for key, pool in pattern.binding_pools.items()
-            }
-        except IndexError:
-            # This handles cases where a user defines a pattern with an empty binding pool.
-            print(f"Error: Pattern '{pattern.name}' has an empty binding pool.")
+            # 2. Render all components using the Jinja2 engine.
+            
+            # Render the instruction
+            instruction_template = self.jinja_env.from_string(pattern.instruction)
+            rendered_instruction = instruction_template.render(parameter_context)
+
+            # Render each architectural code component
+            components = pattern.components
+            rendered_imports = self.jinja_env.from_string(components.imports).render(parameter_context)
+            rendered_model_def = self.jinja_env.from_string(components.model_definition).render(parameter_context)
+            rendered_training_loop = self.jinja_env.from_string(components.training_loop).render(parameter_context)
+            rendered_evaluation = self.jinja_env.from_string(components.evaluation).render(parameter_context)
+
+            # Render the validation snippets
+            rendered_tests = [
+                self.jinja_env.from_string(test).render(parameter_context)
+                for test in pattern.validation.unit_test_snippets
+            ]
+
+        except TemplateSyntaxError as e:
+            print(f"Jinja2 template error in pattern '{pattern.pattern_id}': {e}")
             return None
 
-        # 2. FIX: Implement the unused 'requires' field logic.
-        import_statements = [f"import {req}" for req in pattern.requires]
-        import_block = "\n".join(import_statements)
+        # 3. Assemble the final code string in a logical order.
+        full_code = "\n\n".join(filter(None, [
+            rendered_imports,
+            rendered_model_def,
+            rendered_training_loop,
+            rendered_evaluation
+        ])).strip()
 
-        # 3. Combine imports with the main template.
-        code_template = pattern.template
-        if import_block:
-            code = f"{import_block}\n\n{code_template}"
-        else:
-            code = code_template
-
-        # 4. Perform all substitutions from the generated bindings.
-        for var_name, value in bindings.items():
-            code = code.replace(f"{{{var_name}}}", str(value))
-        
-        # 5. Handle "nested" bindings (e.g., a description that uses another placeholder).
-        # Running substitutions a second time is a simple and effective way to resolve these.
-        for var_name, value in bindings.items():
-            code = code.replace(f"{{{var_name}}}", str(value))
-
-        # 6. Check for uniqueness using an MD5 hash.
-        code_hash = hashlib.md5(code.encode()).hexdigest()
+        # 4. Check for uniqueness.
+        code_hash = hashlib.md5(full_code.encode()).hexdigest()
         if code_hash in self.generated_hashes:
-            return None  # This is a duplicate, skip it.
+            return None  # Duplicate
         self.generated_hashes.add(code_hash)
 
-        # 7. FIX: Format code with robust exception handling.
+        # 5. Format the final code.
         try:
-            # Replaced the unsafe 'except: pass' with specific, meaningful handling.
-            formatted_code = autopep8.fix_code(code)
+            formatted_code = autopep8.fix_code(full_code)
         except (IndentationError, SyntaxError):
-            # If autopep8 fails, the generated code is likely malformed. Discard it.
-            return None
+            return None # Discard malformed code
 
-        # Return both the code and the bindings that created it.
-        # This is crucial for our new, robust instruction labeling system.
-        return formatted_code, bindings
+        return formatted_code, rendered_instruction, rendered_tests
