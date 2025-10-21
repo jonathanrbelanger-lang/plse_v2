@@ -1,55 +1,88 @@
-# This file defines a single CombinatorialPattern for sorting algorithms.
-# The PatternRegistry will discover and load this file automatically.
+plse_version: "2.0"
+pattern_id: "python.algorithmic.sorting.basic_in_place"
 
-name: "sort_algorithm"
-category: "ALGORITHMIC"
-complexity: 3
-requires: [] # No external libraries needed for these simple sorts.
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates fundamental in-place sorting algorithms (Bubble, Selection, Insertion).
+    This pattern teaches basic loop control, list indexing, and swapping elements.
+    It is a foundational concept in computer science.
+  tags: [python, algorithm, sorting, best-practice]
+  pedagogy:
+    concept: "In-Place Sorting Algorithms"
+    difficulty: "beginner"
+    related_patterns: []
 
-template: |
-  def {func_name}({arr_name}):
-      """{description}"""
-      n = len({arr_name})
-      for i in range(n):
-          {inner_logic}
-      return {arr_name}
+# The instruction is now a Jinja2 template. The engine will render it.
+instruction: "Write a Python function to implement the {{ func_name | replace('_', ' ') }} algorithm."
 
-# This is the core of the combinatorial engine. The generator will pick one
-# item from each of these lists to create a unique code snippet.
-binding_pools:
+# Parameters are now formally defined.
+parameters:
   func_name:
-    - "bubble_sort"
-    - "selection_sort"
-    - "insertion_sort"
-
+    type: "choice"
+    description: "The name of the sorting function to implement."
+    default: "bubble_sort"
+    constraints:
+      options: ["bubble_sort", "selection_sort", "insertion_sort"]
   arr_name:
-    - "arr"
-    - "data"
-    - "input_list"
+    type: "choice"
+    description: "The variable name for the list to be sorted."
+    default: "arr"
+    constraints:
+      options: ["arr", "data", "input_list"]
 
-  description:
-    - "Implements the bubble sort algorithm."
-    - "Implements the selection sort algorithm."
-    - "Implements the insertion sort algorithm."
+# The code is now broken into architectural components.
+components:
+  imports: "" # No imports needed for this simple pattern.
 
-  inner_logic:
-    # Bubble Sort Logic
+  model_definition: |
+    def {{ func_name }}({{ arr_name }}: list) -> list:
+        """
+        Sorts a list of numbers in ascending order using the
+        {{ func_name | replace('_', ' ') }} algorithm.
+        """
+        n = len({{ arr_name }})
+
+  # We'll put the core logic in the 'training_loop' component for this example
+  # to demonstrate the architectural separation.
+  training_loop: |
+    {% if func_name == 'bubble_sort' %}
+        # Bubble Sort Logic
+        for i in range(n):
+            for j in range(0, n - i - 1):
+                if {{ arr_name }}[j] > {{ arr_name }}[j + 1]:
+                    {{ arr_name }}[j], {{ arr_name }}[j + 1] = {{ arr_name }}[j + 1], {{ arr_name }}[j]
+    {% elif func_name == 'selection_sort' %}
+        # Selection Sort Logic
+        for i in range(n):
+            min_idx = i
+            for j in range(i + 1, n):
+                if {{ arr_name }}[j] < {{ arr_name }}[min_idx]:
+                    min_idx = j
+            {{ arr_name }}[i], {{ arr_name }}[min_idx] = {{ arr_name }}[min_idx], {{ arr_name }}[i]
+    {% elif func_name == 'insertion_sort' %}
+        # Insertion Sort Logic
+        for i in range(1, n):
+            key = {{ arr_name }}[i]
+            j = i - 1
+            while j >= 0 and key < {{ arr_name }}[j]:
+                {{ arr_name }}[j + 1] = {{ arr_name }}[j]
+                j -= 1
+            {{ arr_name }}[j + 1] = key
+    {% endif %}
+
+  evaluation: |
+    return {{ arr_name }}
+
+# The pattern now includes its own tests!
+validation:
+  linter_checks: true
+  unit_test_snippets:
     - |
-      for j in range(0, n - i - 1):
-          if {arr_name}[j] > {arr_name}[j + 1]:
-              {arr_name}[j], {arr_name}[j + 1] = {arr_name}[j + 1], {arr_name}[j]
-    # Selection Sort Logic
+      test_list = [64, 34, 25, 12, 22, 11, 90]
+      sorted_list = {{ func_name }}(test_list.copy())
+      assert sorted_list == [11, 12, 22, 25, 34, 64, 90], "Failed on standard list"
     - |
-      min_idx = i
-      for j in range(i + 1, n):
-          if {arr_name}[j] < {arr_name}[min_idx]:
-              min_idx = j
-      {arr_name}[i], {arr_name}[min_idx] = {arr_name}[min_idx], {arr_name}[i]
-    # Insertion Sort Logic
-    - |
-      key = {arr_name}[i]
-      j = i - 1
-      while j >= 0 and {arr_name}[j] > key:
-          {arr_name}[j + 1] = {arr_name}[j]
-          j -= 1
-      {arr_name}[j + 1] = key
+      test_list = [5, 4, 3, 2, 1]
+      sorted_list = {{ func_name }}(test_list.copy())
+      assert sorted_list == [1, 2, 3, 4, 5], "Failed on reversed list"
