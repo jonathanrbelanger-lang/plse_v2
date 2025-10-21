@@ -1,50 +1,81 @@
 """
-Defines the core data structures for the Python Latent Space Explorer (PLSE).
-
-This includes the main `CombinatorialPattern` for defining code generation templates
-and the `ValidationResult` for structuring the output of the validation pipeline.
+Defines the core data structures for the PLSE v2.0, based on the
+strategic framework for a pedagogical, YAML-based pattern library.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Any, Sequence
 
-# The original script used an Enum for categories, which was a good design choice.
-# We will formalize it here for clarity and type safety.
+# --- Schema-aligned Dataclasses ---
+
 class PatternCategory(Enum):
     """Enumeration for the categories of Python patterns."""
     ALGORITHMIC = "algorithmic"
     DATA_STRUCTURE = "data_structure"
-    FUNCTIONAL = "functional"
-    OOP = "oop"
-    ASYNC = "async"
-    ERROR_HANDLING = "error_handling"
-    # We can easily add more categories here in the future.
-    FILE_IO = "file_io"
-    STANDARD_LIBRARY = "standard_library"
+    DEEP_LEARNING = "deep_learning" # New category for ML focus
+    DATA_PROCESSING = "data_processing"
+    ML_CONCEPTS = "ml_concepts"
+    # ... add others as needed
 
 @dataclass
-class CombinatorialPattern:
+class Pedagogy:
+    """Defines the educational objective of a pattern."""
+    concept: str
+    difficulty: str # e.g., "beginner", "intermediate", "advanced"
+    related_patterns: List[str] = field(default_factory=list)
+
+@dataclass
+class Metadata:
+    """Container for all descriptive metadata about the pattern."""
+    author: str
+    description: str
+    tags: List[str]
+    pedagogy: Pedagogy
+
+@dataclass
+class Parameter:
+    """Defines a variable for dynamic code generation."""
+    type: str # e.g., "int", "float", "string", "bool", "choice"
+    description: str
+    default: Any
+    constraints: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class Components:
+    """Architectural blueprint of the code to be generated."""
+    imports: str
+    model_definition: str
+    data_setup: str = ""
+    training_loop: str = ""
+    evaluation: str = ""
+
+@dataclass
+class Validation:
+    """Defines methods for verifying the correctness of generated code."""
+    linter_checks: bool = True
+    unit_test_snippets: List[str] = field(default_factory=list)
+    expected_output: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class PLSEPattern:
     """
-    Defines a code pattern with pools of bindings for combinatorial generation.
-    This replaces the old Pattern/PatternVariant system.
+    The top-level dataclass for a single, complete pattern definition,
+    loaded from a YAML file. This replaces the simpler CombinatorialPattern.
     """
-    name: str
-    category: PatternCategory
-    complexity: int  # A 1-5 scale of complexity.
-    requires: List[str] = field(default_factory=list)
-    template: str = ""
-    
-    # This is the core architectural change. Instead of a fixed list of variants,
-    # we define pools of possible substitutions for each placeholder.
-    binding_pools: Dict[str, List[str]] = field(default_factory=dict)
+    plse_version: str
+    pattern_id: str
+    metadata: Metadata
+    instruction: str
+    parameters: Dict[str, Parameter]
+    components: Components
+    validation: Validation = field(default_factory=Validation)
+
+# --- Supporting Dataclasses ---
 
 @dataclass
 class ValidationResult:
-    """
-    Represents the outcome of a validation check from any validator.
-    This provides a standardized way to report success or failure.
-    """
+    """Represents the outcome of a validation check."""
     valid: bool
     code: str
     errors: List[str] = field(default_factory=list)
