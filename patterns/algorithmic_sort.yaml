@@ -1,0 +1,55 @@
+# This file defines a single CombinatorialPattern for sorting algorithms.
+# The PatternRegistry will discover and load this file automatically.
+
+name: "sort_algorithm"
+category: "ALGORITHMIC"
+complexity: 3
+requires: [] # No external libraries needed for these simple sorts.
+
+template: |
+  def {func_name}({arr_name}):
+      """{description}"""
+      n = len({arr_name})
+      for i in range(n):
+          {inner_logic}
+      return {arr_name}
+
+# This is the core of the combinatorial engine. The generator will pick one
+# item from each of these lists to create a unique code snippet.
+binding_pools:
+  func_name:
+    - "bubble_sort"
+    - "selection_sort"
+    - "insertion_sort"
+
+  arr_name:
+    - "arr"
+    - "data"
+    - "input_list"
+
+  description:
+    - "Implements the bubble sort algorithm."
+    - "Implements the selection sort algorithm."
+    - "Implements the insertion sort algorithm."
+
+  inner_logic:
+    # Bubble Sort Logic
+    - |
+      for j in range(0, n - i - 1):
+          if {arr_name}[j] > {arr_name}[j + 1]:
+              {arr_name}[j], {arr_name}[j + 1] = {arr_name}[j + 1], {arr_name}[j]
+    # Selection Sort Logic
+    - |
+      min_idx = i
+      for j in range(i + 1, n):
+          if {arr_name}[j] < {arr_name}[min_idx]:
+              min_idx = j
+      {arr_name}[i], {arr_name}[min_idx] = {arr_name}[min_idx], {arr_name}[i]
+    # Insertion Sort Logic
+    - |
+      key = {arr_name}[i]
+      j = i - 1
+      while j >= 0 and {arr_name}[j] > key:
+          {arr_name}[j + 1] = {arr_name}[j]
+          j -= 1
+      {arr_name}[j + 1] = key
