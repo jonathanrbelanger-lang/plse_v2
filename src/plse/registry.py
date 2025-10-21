@@ -1,6 +1,6 @@
 """
 Defines the PatternRegistry, responsible for discovering, loading, and providing
-access to all CombinatorialPattern definitions from external YAML files.
+access to all PLSEPattern definitions from external YAML files.
 """
 
 import os
@@ -9,35 +9,24 @@ import yaml
 import random
 from typing import Dict, List, Optional, Tuple
 
-# We need to import our custom dataclasses and enums from the patterns.py file
-from .patterns import CombinatorialPattern, PatternCategory
+# Import the new, more detailed dataclasses
+from .patterns import PLSEPattern, Metadata, Pedagogy, Parameter, Components, Validation, PatternCategory
 
 class PatternRegistry:
     """
-    A dynamic registry that loads and manages CombinatorialPattern objects
+    A dynamic registry that loads and manages PLSEPattern objects
     from a specified directory of YAML files.
     """
 
     def __init__(self, patterns_dir: str):
-        """
-        Initializes the registry by loading all patterns from the given directory.
-
-        Args:
-            patterns_dir (str): The path to the directory containing pattern.yaml files.
-        """
-        self.patterns: Dict[str, CombinatorialPattern] = {}
+        self.patterns: Dict[str, PLSEPattern] = {}
         self._load_patterns_from_files(patterns_dir)
 
     def _load_patterns_from_files(self, patterns_dir: str):
-        """
-        Discovers and loads all pattern definitions from YAML files in a directory.
-        This is the core of our new modular architecture.
-        """
         if not os.path.isdir(patterns_dir):
             print(f"Warning: Patterns directory not found at '{patterns_dir}'. No patterns loaded.")
             return
 
-        # Use glob to find all files ending with .yaml or .yml
         pattern_files = glob.glob(os.path.join(patterns_dir, "*.yaml"))
         pattern_files.extend(glob.glob(os.path.join(patterns_dir, "*.yml")))
 
@@ -49,50 +38,56 @@ class PatternRegistry:
         for filepath in pattern_files:
             try:
                 with open(filepath, 'r') as f:
-                    pattern_data = yaml.safe_load(f)
+                    data = yaml.safe_load(f)
 
-                    # --- Data Validation and Conversion ---
-                    # Convert the category string from YAML (e.g., "ALGORITHMIC")
-                    # into the actual PatternCategory.ALGORITHMIC enum member.
-                    category_str = pattern_data.get("category", "").upper()
-                    pattern_data["category"] = PatternCategory[category_str]
+                    # --- New Nested Deserialization Logic ---
+                    # We now manually construct the nested dataclasses for validation.
+                    
+                    meta_data = data.get('metadata', {})
+                    pedagogy_obj = Pedagogy(**meta_data.get('pedagogy', {}))
+                    metadata_obj = Metadata(
+                        author=meta_data.get('author'),
+                        description=meta_data.get('description'),
+                        tags=meta_data.get('tags', []),
+                        pedagogy=pedagogy_obj
+                    )
 
-                    # Instantiate the dataclass using the loaded data
-                    pattern = CombinatorialPattern(**pattern_data)
+                    params_obj = {
+                        name: Parameter(**p_data)
+                        for name, p_data in data.get('parameters', {}).items()
+                    }
+
+                    components_obj = Components(**data.get('components', {}))
+                    validation_obj = Validation(**data.get('validation', {}))
+
+                    pattern = PLSEPattern(
+                        plse_version=data.get('plse_version'),
+                        pattern_id=data.get('pattern_id'),
+                        metadata=metadata_obj,
+                        instruction=data.get('instruction'),
+                        parameters=params_obj,
+                        components=components_obj,
+                        validation=validation_obj
+                    )
+                    
                     self.register(pattern)
-                    print(f"  - Successfully loaded pattern: '{pattern.name}'")
+                    print(f"  - Successfully loaded pattern: '{pattern.pattern_id}'")
 
-            except yaml.YAMLError as e:
-                print(f"Error loading YAML from {filepath}: {e}")
-            except KeyError as e:
-                # This happens if the YAML is missing a required field or
-                # if the category string is invalid.
-                print(f"Error processing pattern data from {filepath}: Invalid key or value - {e}")
-            except Exception as e:
-                print(f"An unexpected error occurred while processing {filepath}: {e}")
+            except (yaml.YAMLError, TypeError, KeyError) as e:
+                print(f"Error processing pattern file {filepath}: {e}")
 
-    def register(self, pattern: CombinatorialPattern):
-        """Registers a single pattern object into the internal dictionary."""
-        if pattern.name in self.patterns:
-            print(f"Warning: Overwriting pattern with duplicate name '{pattern.name}'.")
-        self.patterns[pattern.name] = pattern
+    def register(self, pattern: PLSEPattern):
+        """Registers a single pattern object."""
+        if pattern.pattern_id in self.patterns:
+            print(f"Warning: Overwriting pattern with duplicate ID '{pattern.pattern_id}'.")
+        self.patterns[pattern.pattern_id] = pattern
 
-    def get(self, name: str) -> Optional[CombinatorialPattern]:
-        """Retrieves a pattern by its unique name."""
-        return self.patterns.get(name)
+    def get(self, pattern_id: str) -> Optional[PLSEPattern]:
+        """Retrieves a pattern by its unique ID."""
+        return self.patterns.get(pattern_id)
 
-    def get_by_category(self, category: PatternCategory) -> List[CombinatorialPattern]:
-        """Gets all patterns belonging to a specific category."""
-        return [p for p in self.patterns.values() if p.category == category]
-
-    def get_random(self, complexity_range: Tuple[int, int] = (1, 5)) -> Optional[CombinatorialPattern]:
-        """
-        Gets a random pattern, optionally filtered by a complexity range.
-        """
-        eligible_patterns = [
-            p for p in self.patterns.values()
-            if complexity_range[0] <= p.complexity <= complexity_range[1]
-        ]
-        if not eligible_patterns:
+    def get_random(self) -> Optional[PLSEPattern]:
+        """Gets a random pattern from the registry."""
+        if not self.patterns:
             return None
-        return random.choice(eligible_patterns)
+        return random.choice(list(self.patterns.values()))
