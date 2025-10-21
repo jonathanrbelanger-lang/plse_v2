@@ -6,10 +6,21 @@ import os
 import json
 from typing import Dict, Optional
 
-# Import the new, upgraded components
-from src.plse.registry import PatternRegistry
-from src.plse.generator import PLSEGenerator
-from src.plse.validation import ValidationPipeline
+# We will import from the 'plse' package we are about to install.
+# The 'src' layout requires a proper installation to work correctly.
+try:
+    from src.plse.registry import PatternRegistry
+    from src.plse.generator import PLSEGenerator
+    from src.plse.validation import ValidationPipeline
+except ImportError:
+    # This block is a fallback in case the package isn't installed yet,
+    # allowing the script to still be understood by some tools.
+    print("Could not import from 'src.plse'. Please ensure the package is installed with 'pip install .'")
+    # We define dummy classes to prevent a hard crash on import
+    class PatternRegistry: pass
+    class PLSEGenerator: pass
+    class ValidationPipeline: pass
+
 
 class TrainingDataGenerator:
     """
@@ -28,25 +39,19 @@ class TrainingDataGenerator:
         """
         Attempts to generate a single, valid training example.
         """
-        # 1. Select a random pattern.
         pattern = self.registry.get_random()
         if not pattern:
             return None
 
-        # 2. Generate code, instruction, and tests from the pattern.
         generation_result = self.generator.generate(pattern)
         if not generation_result:
             return None
         code, instruction, tests = generation_result
 
-        # 3. Validate the generated code AND run its unit tests.
         validation_result = self.pipeline.validate(code, tests)
         if not validation_result.valid:
-            # print(f"Validation failed for {pattern.pattern_id}: {validation_result.errors}")
             return None
 
-        # 4. If all checks pass, format the final output.
-        # The instruction is now perfectly aligned with the code, no guesswork needed.
         return {
             "instruction": instruction,
             "input": "",
@@ -57,7 +62,7 @@ class TrainingDataGenerator:
         """Generates a complete dataset of a specified size."""
         examples = []
         attempts = 0
-        max_attempts = n_examples * 200 # Increased attempts as validation is stricter
+        max_attempts = n_examples * 200
 
         print(f"\nGenerating {n_examples} training examples...")
         while len(examples) < n_examples and attempts < max_attempts:
