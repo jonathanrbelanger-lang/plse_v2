@@ -1,0 +1,89 @@
+plse_version: "2.0"
+pattern_id: "orchestration_devops_dockerfile"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a production-grade, multi-stage Dockerfile for a Python application.
+    This pattern teaches the critical DevOps concept of separating the build environment
+    (with compilers and dev dependencies) from the final, minimal runtime environment.
+    This results in smaller, more secure, and faster-deploying container images.
+  tags: [orchestration, devops, docker, containerization, mlops, best-practice, expert]
+  pedagogy:
+    concept: "Optimizing Docker Images with Multi-Stage Builds"
+    difficulty: "expert"
+
+instruction: "Write a multi-stage Dockerfile for a Python {{ python_version }} application. The builder stage should install dependencies from a `requirements.txt` file into a virtual environment. The final stage should copy the virtual environment and application code into a slim base image, creating a minimal and secure production image."
+
+parameters:
+  python_version:
+    type: "choice"
+    description: "The version of the Python base image to use."
+    default: "3.11"
+    constraints:
+      options: ["3.10", "3.11", "3.12"]
+  app_entrypoint:
+    type: "string"
+    description: "The main application file to be run by the container."
+    default: "main.py"
+
+requires: [] # The generated artifact is not Python code
+
+components:
+  imports: |
+    # --- STAGE 1: The Builder ---
+    # Use a full-featured base image that includes build tools.
+    # Name this stage 'builder' so we can reference it later.
+    FROM python:{{ python_version }}-bullseye AS builder
+
+  data_setup: |
+    # Set up the build environment
+    WORKDIR /app
+
+    # Create and activate a virtual environment
+    RUN python -m venv /opt/venv
+    ENV PATH="/opt/venv/bin:$PATH"
+
+    # Copy only the requirements file first to leverage Docker's layer caching
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    # Copy the rest of the application source code
+    COPY . .
+
+  training_loop: |
+    # --- STAGE 2: The Final Production Image ---
+    # Start from a minimal, slim base image for a smaller footprint.
+    FROM python:{{ python_version }}-slim-bullseye
+
+  evaluation: |
+    WORKDIR /app
+
+    # Copy the virtual environment from the builder stage.
+    # This is the key step in a multi-stage build.
+    COPY --from=builder /opt/venv /opt/venv
+
+    # Copy the application code from the builder stage
+    COPY --from=builder /app .
+
+    # Set the path to use the virtual environment's Python
+    ENV PATH="/opt/venv/bin:$PATH"
+
+  model_definition: |
+    # Define the command to run when the container starts.
+    CMD ["python", "{{ app_entrypoint }}"]
+
+validation:
+  linter_checks: false # Linters are not applicable to Dockerfiles
+  unit_test_snippets:
+    - |
+      # This validation is a full integration test. It creates dummy application
+      # files, writes the generated Dockerfile, and then attempts to build it
+      # using the `docker` command-line tool. A successful build (exit code 0)
+      # proves the Dockerfile is syntactically correct and functional.
+      shell_exec: |
+        echo "fastapi" > requirements.txt && \
+        echo "print('Hello from Docker!')" > main.py && \
+        echo -e "{{ __raw_code__ }}" > Dockerfile && \
+        docker build -t plse-docker-test-image . && \
+        docker rmi plse-docker-test-image
