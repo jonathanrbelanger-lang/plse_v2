@@ -1,0 +1,122 @@
+plse_version: "2.0"
+pattern_id: "python.core.basic_class_definition"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the fundamentals of Object-Oriented Programming (OOP) in Python
+    by defining a simple class. This pattern covers the `__init__` constructor for
+    initializing an object's state (attributes) and instance methods that operate
+    on that state.
+  tags: [python, core-language, oop, class, object, best-practice]
+  pedagogy:
+    concept: "Basic Class and Object Definition"
+    difficulty: "beginner"
+
+instruction: "Write a basic Python class named `{{ class_name }}`. The class should have an `__init__` method to set the `{{ owner_var }}` and an initial `balance`. It should also have `deposit` and `withdraw` methods that modify the balance."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the class to define."
+    default: "BankAccount"
+    constraints:
+      options: ["BankAccount", "Wallet", "Ledger"]
+  owner_var:
+    type: "choice"
+    description: "The variable name for the account owner."
+    default: "owner_name"
+    constraints:
+      options: ["owner_name", "account_holder", "user"]
+  balance_var:
+    type: "choice"
+    description: "The variable name for the account balance."
+    default: "balance"
+    constraints:
+      options: ["balance", "amount", "value"]
+
+requires: []
+
+template: |
+  class {{ class_name }}:
+      """
+      A simple class to represent a bank account.
+      """
+      def __init__(self, {{ owner_var }}: str, initial_balance: float = 0.0):
+          """
+          The constructor for the class. Initializes a new object's state.
+          
+          Args:
+              {{ owner_var }}: The name of the account holder.
+              initial_balance: The starting balance of the account.
+          """
+          self.{{ owner_var }} = {{ owner_var }}
+          self.{{ balance_var }} = initial_balance
+          print(f"Account for '{self.{{ owner_var }}}' created with balance: ${self.{{ balance_var }}:.2f}")
+
+      def deposit(self, amount: float):
+          """Adds a positive amount to the balance."""
+          if amount <= 0:
+              print("Deposit amount must be positive.")
+              return
+          self.{{ balance_var }} += amount
+          print(f"Deposited ${amount:.2f}. New balance: ${self.{{ balance_var }}:.2f}")
+
+      def withdraw(self, amount: float):
+          """Subtracts a positive amount from the balance if funds are sufficient."""
+          if amount <= 0:
+              print("Withdrawal amount must be positive.")
+              return
+          if amount > self.{{ balance_var }}:
+              print(f"Withdrawal failed: Insufficient funds. Current balance: ${self.{{ balance_var }}:.2f}")
+          else:
+              self.{{ balance_var }} -= amount
+              print(f"Withdrew ${amount:.2f}. New balance: ${self.{{ balance_var }}:.2f}")
+
+      def get_balance(self) -> float:
+          """Returns the current balance."""
+          return self.{{ balance_var }}
+
+  # --- Example Usage ---
+  if __name__ == "__main__":
+      # 1. Create an instance of the class (an object)
+      my_account = {{ class_name }}({{ owner_var }}="Alice", initial_balance=100.0)
+      
+      # 2. Call the object's methods
+      my_account.deposit(50.50)
+      my_account.withdraw(20.0)
+      my_account.withdraw(200.0) # This should fail
+      
+      # 3. Access the object's state
+      final_balance = my_account.get_balance()
+      print(f"\\nFinal balance for {my_account.{{ owner_var }}}: ${final_balance:.2f}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the class logic
+      test_account = {{ class_name }}({{ owner_var }}="Bob", initial_balance=50.0)
+      
+      # Test initial state
+      assert test_account.get_balance() == 50.0
+      assert test_account.{{ owner_var }} == "Bob"
+      
+      # Test deposit
+      test_account.deposit(25.5)
+      assert test_account.get_balance() == 75.5
+      
+      # Test valid withdrawal
+      test_account.withdraw(30.0)
+      assert test_account.get_balance() == 45.5
+      
+      # Test invalid withdrawal (insufficient funds)
+      initial_balance = test_account.get_balance()
+      test_account.withdraw(100.0)
+      assert test_account.get_balance() == initial_balance, "Balance should not change on failed withdrawal."
+      
+      # Test invalid deposit (negative amount)
+      test_account.deposit(-10.0)
+      assert test_account.get_balance() == initial_balance, "Balance should not change on invalid deposit."
+      
+      print("Class definition pattern validation passed.")
