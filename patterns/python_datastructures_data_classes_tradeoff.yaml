@@ -1,0 +1,142 @@
+plse_version: "2.0"
+pattern_id: "python_datastructures_data_classes_tradeoff"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    A "tradeoff" pattern comparing three ways to structure data in Python: a
+    plain `dict`, a `dataclasses.dataclass`, and a `pydantic.BaseModel`. It
+    demonstrates the spectrum from unstructured flexibility (dict) to structured
+    type-hinting (dataclass) to robust runtime validation and parsing (pydantic),
+    teaching the LLM to choose the right tool for data representation.
+  tags: [python, data-structures, trade-off, dict, dataclass, pydantic, best-practice, architecture, expert]
+  pedagogy:
+    concept: "Choosing Data Structures: Flexibility vs. Safety"
+    difficulty: "expert"
+
+instruction: "Write a Python script that processes user data. Implement the data handling in three distinct ways: 1) using a raw dictionary, 2) using a `dataclasses.dataclass`, and 3) using a `pydantic.BaseModel`. The script should demonstrate how Pydantic provides runtime data validation and type coercion that the other methods lack. Include comments explaining the trade-offs."
+
+parameters:
+  user_id_var:
+    type: "int"
+    description: "An example user ID to process."
+    default: 123
+
+requires:
+  - "dataclasses"
+  - "pydantic"
+  - "typing"
+
+template: |
+  from dataclasses import dataclass
+  from pydantic import BaseModel, ValidationError
+  from typing import List
+
+  # --- Setup: Raw data, simulating an incoming JSON payload from an API ---
+  # Note the 'id' is a string, which might be an unexpected type.
+  raw_user_data = {
+      "id": "{{ user_id_var }}",
+      "username": "testuser",
+      "email": "test@example.com",
+      "tags": ["python", "pydantic"]
+  }
+
+  print("="*70)
+  print("ANALYSIS: Comparing dict vs. dataclass vs. pydantic for data handling")
+  print("="*70)
+
+  # --- Method 1: Plain Dictionary ---
+  # Flexible and simple, but offers no safety. Prone to typos in keys and
+  # provides no information about expected data types.
+  print("\\n--- Method 1: Using a plain `dict` ---")
+  def process_user_dict(user: dict):
+      print(f"Processing user ID (type: {type(user.get('id'))}): {user.get('id')}")
+  process_user_dict(raw_user_data)
+  print("Trade-off: Maximum flexibility, but zero validation or type safety.")
+
+  # --- Method 2: `dataclasses.dataclass` ---
+  # Adds structure and type hints for static analysis (e.g., mypy) and IDEs.
+  # However, it performs NO runtime validation or type conversion.
+  print("\\n--- Method 2: Using a `dataclasses.dataclass` ---")
+  @dataclass
+  class UserDataclass:
+      id: int
+      username: str
+      email: str
+      tags: List[str]
+
+  try:
+      # Dataclass does not parse the data; it accepts the string 'id' as-is.
+      user_dc = UserDataclass(**raw_user_data)
+      def process_user_dataclass(user: UserDataclass):
+          print(f"Processing user ID (type: {type(user.id)}): {user.id}")
+      process_user_dataclass(user_dc)
+  except TypeError as e:
+      print(f"An error occurred: {e}")
+  print("Trade-off: Provides structure and static type hints, but no runtime validation.")
+
+  # --- Method 3: `pydantic.BaseModel` ---
+  # The most robust solution for handling external data.
+  # It not only defines the structure but also VALIDATES and PARSES the
+  # input data at runtime, coercing types where possible.
+  print("\\n--- Method 3: Using a `pydantic.BaseModel` ---")
+  class UserPydantic(BaseModel):
+      id: int
+      username: str
+      email: str
+      tags: List[str]
+
+  try:
+      # Pydantic parses the raw dict, converting the string 'id' to an int.
+      user_pydantic = UserPydantic(**raw_user_data)
+      def process_user_pydantic(user: UserPydantic):
+          print(f"Processing user ID (type: {type(user.id)}): {user.id}")
+      process_user_pydantic(user_pydantic)
+  except ValidationError as e:
+      print(f"Pydantic validation failed: {e}")
+  print("Trade-off: Provides structure, static hints, AND robust runtime validation/parsing.")
+
+  # --- Conclusion ---
+  print("\\n--- CONCLUSION ---")
+  print("  - `dict`: Best for unstructured, internal data where flexibility is key.")
+  print("  - `dataclass`: Best for structured, internal data where you trust the source and want lightweight classes.")
+  print("  - `pydantic`: Best for structured, EXTERNAL data (APIs, configs) where you must validate and parse inputs.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates the core lesson: only Pydantic provides runtime
+      # validation and type coercion.
+      import pytest
+      
+      # 1. Define the classes again for the test scope
+      @dataclass
+      class TestUserDC:
+          id: int
+      
+      class TestUserPydantic(BaseModel):
+          id: int
+          
+      # 2. Create valid and invalid data payloads
+      valid_data = {'id': 123}
+      invalid_data_type = {'id': '123'} # Pydantic should coerce this
+      invalid_data_value = {'id': 'abc'} # Pydantic should fail on this
+      
+      # 3. Test the dataclass behavior
+      # It accepts the string '123' without complaint, which can cause downstream bugs.
+      dc_instance = TestUserDC(**invalid_data_type)
+      assert dc_instance.id == '123'
+      assert not isinstance(dc_instance.id, int)
+      
+      # 4. Test the Pydantic behavior
+      # It correctly coerces the string '123' into an integer.
+      pydantic_instance = TestUserPydantic(**invalid_data_type)
+      assert pydantic_instance.id == 123
+      assert isinstance(pydantic_instance.id, int)
+      
+      # It correctly raises a validation error for un-parseable data.
+      with pytest.raises(ValidationError):
+          TestUserPydantic(**invalid_data_value)
+          
+      print("Tradeoff pattern validation passed: Pydantic's unique runtime validation was confirmed.")
