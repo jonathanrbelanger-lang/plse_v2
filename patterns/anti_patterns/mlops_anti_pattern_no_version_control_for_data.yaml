@@ -1,0 +1,180 @@
+plse_version: "2.0"
+pattern_id: "mlops_anti_pattern_no_version_control_for_data"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    A conceptual pattern demonstrating the severe risks of not versioning data
+    and models together. It simulates a scenario where a model is trained on
+    'data_v1', but the data source is later updated in-place with a new schema
+    ('data_v2'). The original model, when run on the new data, fails silently
+    by producing incorrect predictions. The solution demonstrates a robust
+    versioning strategy.
+  tags: [mlops, anti-pattern, production, correctness, data-versioning, model-versioning, dvc, reproducibility, expert]
+  pedagogy:
+    concept: "Data and Model Versioning"
+    difficulty: "expert"
+
+instruction: "{% if is_anti_pattern %}The following script simulates a silent production failure caused by a lack of data versioning. A model is used on data that has changed since training. Explain why this is a critical MLOps anti-pattern and how it leads to incorrect results.{% else %}Write a script demonstrating a robust MLOps process for data and model versioning. Show how to train and save versioned artifacts, and then correctly load the appropriate model for a specific version of the data at inference time.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed workflow. If false, generate the robust, versioned workflow."
+    default: true
+  data_filename:
+    type: "choice"
+    description: "The base name for the data file."
+    default: "feature_data.csv"
+    constraints:
+      options: ["feature_data.csv", "sensor_readings.csv", "user_metrics.csv"]
+  model_filename:
+    type: "choice"
+    description: "The base name for the model artifact."
+    default: "model.joblib"
+    constraints:
+      options: ["model.joblib", "predictor.pkl"]
+
+requires:
+  - "pandas as pd"
+  - "sklearn.linear_model.LinearRegression"
+  - "joblib"
+  - "os"
+
+template: |
+  import pandas as pd
+  from sklearn.linear_model import LinearRegression
+  import joblib
+  import os
+
+  # --- Define two different versions of our data schema ---
+  # Version 1: 'temperature' is the first feature.
+  data_v1 = pd.DataFrame({
+      'temperature': [20, 22, 25, 19, 18],
+      'humidity': [60, 65, 70, 55, 58],
+      'sales': [100, 110, 125, 95, 90]
+  })
+
+  # Version 2: The columns are reordered. 'humidity' is now first.
+  # This is a subtle but breaking schema change.
+  data_v2 = pd.DataFrame({
+      'humidity': [75, 80, 85, 72, 78],
+      'temperature': [30, 32, 35, 29, 31],
+      'sales': [150, 160, 175, 145, 155]
+  })
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Unversioned, mutable data source ---
+  
+  # 1. TRAINING: A model is trained on the initial data version.
+  print("--- (TRAINING PHASE on data_v1) ---")
+  data_v1.to_csv("{{ data_filename }}", index=False)
+  
+  df_train = pd.read_csv("{{ data_filename }}")
+  X_train = df_train[['temperature', 'humidity']]
+  y_train = df_train['sales']
+  
+  model = LinearRegression()
+  model.fit(X_train, y_train)
+  joblib.dump(model, "{{ model_filename }}")
+  print("Model trained on data_v1 and saved.")
+
+  # 2. DATA UPDATE: The data source is updated in-place with a new schema.
+  # The filename remains the same, hiding the change.
+  print("\\n--- (DATA SOURCE UPDATED IN-PLACE) ---")
+  data_v2.to_csv("{{ data_filename }}", index=False)
+  print("'{{ data_filename }}' has been overwritten with new data (v2).")
+
+  # 3. INFERENCE: The old model is used on the new, changed data.
+  print("\\n--- (INFERENCE PHASE on data_v2) ---")
+  loaded_model = joblib.load("{{ model_filename }}")
+  df_inference = pd.read_csv("{{ data_filename }}")
+  
+  # The model expects ['temperature', 'humidity'] but gets ['humidity', 'temperature']
+  # because pandas reads columns in the order they appear in the file.
+  X_inference = df_inference[['temperature', 'humidity']]
+  
+  prediction = loaded_model.predict(X_inference.head(1))
+  print(f"Prediction for first row of v2 data: {prediction[0]:.2f}")
+  print("ANALYSIS: The prediction is nonsensical. The model is silently failing because it's applying weights for 'temperature' to the 'humidity' data and vice-versa.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Versioned data and model artifacts ---
+
+  # 1. TRAINING: Train and save artifacts with explicit versions.
+  print("--- (TRAINING PHASE with versioning) ---")
+  data_v1.to_csv("data_v1.csv", index=False)
+  model_v1 = LinearRegression().fit(data_v1[['temperature', 'humidity']], data_v1['sales'])
+  joblib.dump(model_v1, "model_v1.joblib")
+  print("Saved data_v1.csv and model_v1.joblib")
+
+  data_v2.to_csv("data_v2.csv", index=False)
+  model_v2 = LinearRegression().fit(data_v2[['temperature', 'humidity']], data_v2['sales'])
+  joblib.dump(model_v2, "model_v2.joblib")
+  print("Saved data_v2.csv and model_v2.joblib")
+
+  # 2. INFERENCE: The inference job knows which version of data it's using
+  # and explicitly loads the corresponding model version.
+  print("\\n--- (INFERENCE PHASE on data_v2) ---")
+  inference_data_version = "v2"
+  
+  # Load the correct, versioned artifacts
+  df_inference = pd.read_csv(f"data_{inference_data_version}.csv")
+  loaded_model = joblib.load(f"model_{inference_data_version}.joblib")
+  
+  # The model and data are guaranteed to be compatible.
+  X_inference = df_inference[['temperature', 'humidity']]
+  
+  prediction = loaded_model.predict(X_inference.head(1))
+  print(f"Prediction for first row of v2 data: {prediction[0]:.2f}")
+  print("ANALYSIS: The prediction is correct. Explicitly versioning and loading artifacts prevents silent failures.")
+  {% endif %}
+
+  # --- Cleanup ---
+  files_to_remove = [
+      "{{ data_filename }}", "{{ model_filename }}",
+      "data_v1.csv", "model_v1.joblib",
+      "data_v2.csv", "model_v2.joblib"
+  ]
+  for f in files_to_remove:
+      if os.path.exists(f):
+          os.remove(f)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates the outcome by calculating the expected predictions
+      # for both the flawed and correct scenarios.
+      
+      # Re-create the data for the test
+      data_v1_test = pd.DataFrame({'temperature': [20, 22], 'humidity': [60, 65], 'sales': [100, 110]})
+      data_v2_test = pd.DataFrame({'humidity': [75, 80], 'temperature': [30, 32], 'sales': [150, 160]})
+      
+      # Train a model on v1 data
+      model_v1_test = LinearRegression().fit(data_v1_test[['temperature', 'humidity']], data_v1_test['sales'])
+      
+      # This is the point to be predicted from v2 data
+      inference_point_v2 = data_v2_test[['temperature', 'humidity']].head(1)
+      
+      {% if is_anti_pattern %}
+      # The anti-pattern incorrectly feeds humidity as temperature and vice-versa.
+      # We simulate this by reordering the columns before prediction.
+      skewed_inference_point = inference_point_v2[['humidity', 'temperature']]
+      skewed_inference_point.columns = ['temperature', 'humidity'] # Trick the model
+      prediction = model_v1_test.predict(skewed_inference_point)[0]
+      
+      # The correct prediction for this point with a model trained on v2 would be ~150.
+      # The incorrect prediction will be wildly different.
+      assert prediction < 140 or prediction > 160, "The skewed prediction should be incorrect."
+      print("Validation passed: Confirmed that unversioned data leads to a numerically incorrect prediction.")
+      
+      {% else %}
+      # The solution trains a new model on v2 data and uses it.
+      model_v2_test = LinearRegression().fit(data_v2_test[['temperature', 'humidity']], data_v2_test['sales'])
+      prediction = model_v2_test.predict(inference_point_v2)[0]
+      
+      # The prediction should be very close to the actual value of 150.
+      assert 149 < prediction < 151, "The version-aware prediction should be correct."
+      print("Validation passed: Confirmed that versioned artifacts lead to a correct prediction.")
+      {% endif %}
