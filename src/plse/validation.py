@@ -34,15 +34,29 @@ class SyntaxValidator(BaseValidator):
             return ValidationResult(False, code, [f"Syntax error on line {e.lineno}: {e.msg}"])
 
 class Flake8Validator(BaseValidator):
+    """
+    Validates code against PEP 8 style conventions using Flake8.
+    Reverted to tempfile method to fix API incompatibility bug.
+    """
     def __init__(self):
         self.style_guide = flake8.get_style_guide(ignore=['E501', 'W292', 'F841', 'E402'])
 
     def validate(self, code: str, **kwargs) -> ValidationResult:
-        report = self.style_guide.check_source(code)
+        # --- BUG FIX: Revert to the correct, file-based API usage ---
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
+            f.write(code)
+            filepath = f.name
+        
+        report = self.style_guide.check_files([filepath])
+        os.remove(filepath)
+        
         if report.total_errors == 0:
             return ValidationResult(True, code)
-        errors = [f"Flake8 ({e.code}): {e.text}" for e in report.errors]
-        return ValidationResult(False, code, errors[:5])
+        else:
+            errors = [f"Flake8 ({e.code} at line {e.line_number}): {e.text}" for e in report.errors]
+            return ValidationResult(False, code, errors[:5])
+
+# ... (The rest of the file remains the same as the last version I sent) ...
 
 def _execute_python_in_process(code: str, queue: multiprocessing.Queue):
     try:
@@ -56,16 +70,14 @@ class SafeExecutionValidator(BaseValidator):
         self.timeout = timeout
 
     def validate(self, code: str, tests: List[str] = [], **kwargs) -> ValidationResult:
-        # This validator now handles both main code execution and test execution
-        if not tests: # Validate main code only
+        if not tests:
             return self._run_python_code(code)
         
-        # Validate test snippets
         for test_snippet in tests:
             if test_snippet.startswith("shell_exec:"):
                 command = test_snippet.replace("shell_exec:", "").strip()
                 result = self._run_shell_command(code, command)
-            else: # Default to python execution
+            else:
                 full_script = f"{code}\n\n# --- Running validation test ---\n{test_snippet}"
                 result = self._run_python_code(full_script)
             
@@ -91,27 +103,19 @@ class SafeExecutionValidator(BaseValidator):
             return ValidationResult(True, code_to_run)
 
     def _run_shell_command(self, code_content: str, command: str) -> ValidationResult:
-        # Create a temporary file to run the command against
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py", dir=".") as f:
             f.write(code_content)
             script_path = f.name
-        
         try:
-            # Substitute placeholder for the dynamic script path
             final_command = command.replace("{{ SCRIPT_PATH }}", script_path)
-            
-            # Execute the command in a shell
             result = subprocess.run(final_command, shell=True, capture_output=True, text=True, timeout=self.timeout + 5)
-            
             if result.returncode != 0:
                 error_msg = f"Shell command failed with exit code {result.returncode}.\\nSTDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
                 return ValidationResult(False, code_content, [error_msg])
-            
             return ValidationResult(True, code_content)
         except subprocess.TimeoutExpired:
             return ValidationResult(False, code_content, [f"Shell command timed out after {self.timeout + 5}s."])
         finally:
-            # Ensure cleanup
             if os.path.exists(script_path):
                 os.remove(script_path)
 
