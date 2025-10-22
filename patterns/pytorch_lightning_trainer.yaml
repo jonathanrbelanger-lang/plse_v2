@@ -1,0 +1,92 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.trainer_with_callbacks"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates how to configure a production-grade PyTorch Lightning Trainer
+    with essential callbacks for monitoring, checkpointing, and early stopping.
+    This is a foundational pattern for robust MLOps.
+  tags: [pytorch, pytorch-lightning, mlops, best-practice, training]
+  pedagogy:
+    concept: "Advanced Trainer Configuration"
+    difficulty: "intermediate"
+
+instruction: "Configure a PyTorch Lightning Trainer with a TensorBoard logger, a learning rate monitor, an early stopping callback that monitors '{{ monitor_metric }}', and a model checkpoint callback."
+
+parameters:
+  monitor_metric:
+    type: "choice"
+    description: "The metric to monitor for early stopping and checkpointing."
+    default: "val_loss"
+    constraints:
+      options: ["val_loss", "val_acc"]
+  patience:
+    type: "choice"
+    description: "The number of epochs to wait for improvement before stopping."
+    default: 3
+    constraints:
+      options: [3, 5, 10]
+  precision:
+    type: "choice"
+    description: "The training precision to use."
+    default: "16-mixed"
+    constraints:
+      options: ["16-mixed", "bf16-mixed", "32-true"]
+
+requires:
+  - "pytorch_lightning as pl"
+  - "from pytorch_lightning.loggers import TensorBoardLogger"
+  - "from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping"
+
+template: |
+  # --- 1. Configure Logger and Callbacks ---
+
+  # Log experiments to a local 'tb_logs' directory
+  logger = TensorBoardLogger("tb_logs", name="my_experiment")
+
+  # Save the best model based on the monitored metric
+  checkpoint_callback = ModelCheckpoint(
+      monitor="{{ monitor_metric }}",
+      mode="{{ 'min' if 'loss' in monitor_metric else 'max' }}",
+      save_top_k=1,
+      verbose=True,
+      filename="{epoch}-{{ monitor_metric }:.2f}"
+  )
+
+  # Monitor the learning rate and log it to the logger
+  lr_monitor = LearningRateMonitor(logging_interval='step')
+
+  # Stop training if the monitored metric doesn't improve for 'patience' epochs
+  early_stopping_callback = EarlyStopping(
+      monitor="{{ monitor_metric }}",
+      patience={{ patience }},
+      mode="{{ 'min' if 'loss' in monitor_metric else 'max' }}"
+  )
+
+  # --- 2. Instantiate the Trainer ---
+  trainer = pl.Trainer(
+      accelerator="auto",
+      devices=1,
+      max_epochs=50,
+      logger=logger,
+      callbacks=[checkpoint_callback, lr_monitor, early_stopping_callback],
+      precision="{{ precision }}",
+      # Log every 20 steps for finer-grained monitoring
+      log_every_n_steps=20
+  )
+
+  print("PyTorch Lightning Trainer configured successfully with advanced callbacks.")
+  # In a real script, you would now call:
+  # model = MyLitModel()
+  # datamodule = MyDataModule()
+  # trainer.fit(model, datamodule)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      assert isinstance(trainer, pl.Trainer)
+      assert len(trainer.callbacks) == 4 # 3 we added + a default progress bar
+      assert isinstance(trainer.logger, TensorBoardLogger)
+      print("Trainer configuration test passed.")
