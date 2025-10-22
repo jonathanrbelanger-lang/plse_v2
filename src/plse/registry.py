@@ -8,7 +8,7 @@ import random
 from typing import List, Optional
 from pydantic import ValidationError
 
-from .schema import RawPatternSchema
+from .schema import PLSEPatternSchema
 from .patterns import PLSEPattern
 
 class PatternRegistry:
@@ -24,9 +24,6 @@ class PatternRegistry:
         self._load_patterns()
 
     def _load_patterns(self):
-        """
-        Recursively walks the patterns directory and loads all valid .yaml/.yml files.
-        """
         print(f"🔍 Scanning for patterns in '{self.patterns_dir}' and its subdirectories...")
         loaded_count = 0
         error_count = 0
@@ -39,21 +36,17 @@ class PatternRegistry:
                         with open(file_path, 'r', encoding='utf-8') as f:
                             raw_data = yaml.safe_load(f)
                         
-                        validated_schema = RawPatternSchema(**raw_data)
+                        validated_schema = PLSEPatternSchema(**raw_data)
                         pattern = PLSEPattern.from_schema(validated_schema)
                         
                         self.patterns.append(pattern)
                         loaded_count += 1
-                        # Disabling verbose success for cleaner logs
-                        # print(f"  - ✅ SUCCESS: Loaded and validated pattern: '{pattern.pattern_id}'")
-
                     except ValidationError as e:
                         print(f"  - ❌ FAILED: Schema validation error in '{os.path.basename(file_path)}':")
                         for error in e.errors():
                             loc = " -> ".join(map(str, error['loc']))
                             print(f"    - Field '{loc}': {error['msg']}")
                         error_count += 1
-                    
                     except Exception as e:
                         print(f"  - ❌ FAILED: Could not parse or process file '{os.path.basename(file_path)}': {e}")
                         error_count += 1
@@ -66,9 +59,3 @@ class PatternRegistry:
         if not self.patterns:
             return None
         return random.choice(self.patterns)
-
-    def __len__(self) -> int:
-        return len(self.patterns)
-
-    def __iter__(self):
-        return iter(self.patterns)
