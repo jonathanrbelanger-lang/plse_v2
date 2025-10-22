@@ -1,0 +1,109 @@
+plse_version: "2.0"
+pattern_id: "pandas.anti_pattern.iterrows_inefficiency"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the significant performance anti-pattern of iterating over a
+    pandas DataFrame using `iterrows()`. This paired pattern contrasts the slow,
+    row-by-row loop with the fast, idiomatic, and highly optimized vectorized
+    operation that performs the same calculation on entire columns at once.
+  tags: [pandas, data-science, anti-pattern, performance, vectorization, best-practice]
+  pedagogy:
+    concept: "Vectorization over Iteration in Pandas"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following pandas code is inefficient because it uses `iterrows()`. Explain why this is a performance anti-pattern and refactor it to use a fast, vectorized operation.{% else %}Write an efficient, vectorized pandas script to calculate a new column from existing columns, avoiding any row-by-row iteration.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  df_var:
+    type: "choice"
+    description: "The variable name for the DataFrame."
+    default: "df"
+    constraints:
+      options: ["df", "sales_data", "measurements"]
+
+requires:
+  - "pandas as pd"
+  - "numpy as np"
+  - "time"
+
+template: |
+  import pandas as pd
+  import numpy as np
+  import time
+
+  # --- 1. Create a reasonably large sample DataFrame ---
+  NUM_ROWS = 100_000
+  {{ df_var }} = pd.DataFrame({
+      'price': np.random.rand(NUM_ROWS) * 100,
+      'quantity': np.random.randint(1, 10, size=NUM_ROWS)
+  })
+  print(f"Created a DataFrame with {NUM_ROWS} rows.")
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Row-by-row iteration with iterrows() ---
+  print("\\n--- Calculating 'total_value' using a slow loop ---")
+  
+  start_time = time.perf_counter()
+  
+  # This is highly inefficient. For each row, pandas has to create a Series
+  # object, and the calculation is done in slow, interpreted Python.
+  totals = []
+  for index, row in {{ df_var }}.iterrows():
+      totals.append(row['price'] * row['quantity'])
+  {{ df_var }}['total_value'] = totals
+  
+  end_time = time.perf_counter()
+  duration = (end_time - start_time) * 1000 # milliseconds
+  
+  print(f"ANALYSIS: The iterative `iterrows()` method took {duration:.2f} ms.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Vectorized operation ---
+  print("\\n--- Calculating 'total_value' using a fast vectorized operation ---")
+  
+  start_time = time.perf_counter()
+  
+  # This is the idiomatic and high-performance way. The multiplication
+  # is performed on the entire columns (Series) at once by pandas'
+  # optimized C/Cython backend.
+  {{ df_var }}['total_value'] = {{ df_var }}['price'] * {{ df_var }}['quantity']
+  
+  end_time = time.perf_counter()
+  duration = (end_time - start_time) * 1000 # milliseconds
+  
+  print(f"ANALYSIS: The vectorized operation took {duration:.2f} ms.")
+  print("This is typically 100x-1000x faster than iterating.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Create a smaller, deterministic DataFrame for the test
+      test_df = pd.DataFrame({'price': [10.0, 20.0], 'quantity': [2, 3]})
+      
+      {% if is_anti_pattern %}
+      # Re-run the anti-pattern logic on the test data
+      totals = []
+      for index, row in test_df.iterrows():
+          totals.append(row['price'] * row['quantity'])
+      test_df['total_value'] = totals
+      {% else %}
+      # Re-run the correct logic on the test data
+      test_df['total_value'] = test_df['price'] * test_df['quantity']
+      {% endif %}
+      
+      # Assert that the calculation is algorithmically correct
+      expected_values = pd.Series([20.0, 60.0], name='total_value')
+      pd.testing.assert_series_equal(test_df['total_value'], expected_values)
+      
+      # Assert that the duration was captured
+      assert 'duration' in locals() and duration > 0
+      
+      print("Pandas iteration pattern validation passed.")
