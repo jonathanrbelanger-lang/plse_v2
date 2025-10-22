@@ -1,0 +1,142 @@
+plse_version: "2.0"
+pattern_id: "mlops.deployment.fastapi_serving"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates how to serve a machine learning model as a REST API using FastAPI.
+    This pattern covers loading a pre-trained model, defining input and output data
+    schemas with Pydantic for validation, and creating an inference endpoint that
+    accepts POST requests.
+  tags: [mlops, deployment, serving, fastapi, pydantic, api, best-practice]
+  pedagogy:
+    concept: "Serving ML Models as a REST API"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script using FastAPI to serve a scikit-learn model. The API should have a single POST endpoint at `/{{ endpoint_path }}` that accepts data conforming to a Pydantic `{{ input_class }}` model and returns a prediction in a `{{ output_class }}` model."
+
+parameters:
+  endpoint_path:
+    type: "choice"
+    description: "The path for the prediction endpoint."
+    default: "predict"
+    constraints:
+      options: ["predict", "score", "invoke"]
+  input_class:
+    type: "choice"
+    description: "The Pydantic class name for the input data schema."
+    default: "InferenceRequest"
+    constraints:
+      options: ["InferenceRequest", "ModelInput", "FeatureSet"]
+  output_class:
+    type: "choice"
+    description: "The Pydantic class name for the output data schema."
+    default: "InferenceResponse"
+    constraints:
+      options: ["InferenceResponse", "ModelOutput", "Prediction"]
+
+requires:
+  - "fastapi"
+  - "uvicorn"
+  - "pydantic"
+  - "sklearn"
+  - "numpy as np"
+  - "joblib" # For saving/loading sklearn models
+
+template: |
+  from fastapi import FastAPI
+  from pydantic import BaseModel, Field
+  import joblib
+  import numpy as np
+  from typing import List
+  import os
+
+  # --- 1. Define Data Schemas with Pydantic ---
+  # Pydantic models provide data validation and serialization.
+  class {{ input_class }}(BaseModel):
+      features: List[float] = Field(..., example=[5.1, 3.5, 1.4, 0.2])
+
+  class {{ output_class }}(BaseModel):
+      prediction: int
+      class_name: str
+
+  # --- 2. Initialize the FastAPI Application ---
+  app = FastAPI(
+      title="ML Model Serving API",
+      description="An API to serve a pre-trained scikit-learn model.",
+      version="1.0.0"
+  )
+
+  # --- 3. Load the Model ---
+  # In a real application, the model is loaded once at startup.
+  MODEL_FILENAME = "model.joblib"
+  CLASS_NAMES = ['setosa', 'versicolor', 'virginica']
+  
+  # Create and save a dummy model for this example
+  from sklearn.linear_model import LogisticRegression
+  dummy_model = LogisticRegression()
+  dummy_model.fit(np.random.rand(10, 4), np.random.randint(0, 3, 10))
+  joblib.dump(dummy_model, MODEL_FILENAME)
+  
+  model = joblib.load(MODEL_FILENAME)
+  print(f"Model '{MODEL_FILENAME}' loaded successfully.")
+
+  # --- 4. Define the Prediction Endpoint ---
+  @app.post("/{{ endpoint_path }}", response_model={{ output_class }})
+  def predict(request: {{ input_class }}):
+      """
+      Accepts input features and returns a model prediction.
+      """
+      # Convert the input data into a NumPy array for the model
+      features_array = np.array(request.features).reshape(1, -1)
+      
+      # Make a prediction
+      prediction_idx = model.predict(features_array)[0]
+      class_name = CLASS_NAMES[prediction_idx]
+      
+      return {"prediction": int(prediction_idx), "class_name": class_name}
+
+  @app.get("/")
+  def read_root():
+      return {"message": "Welcome to the Model Serving API. Use the /docs endpoint to see the API documentation."}
+
+  # --- 5. (Optional) Run the server for local testing ---
+  # In production, a process manager like Gunicorn would run this command.
+  if __name__ == "__main__":
+      import uvicorn
+      print("To run the server, execute: uvicorn your_script_name:app --reload")
+      # uvicorn.run(app, host="0.0.0.0", port=8000)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      from fastapi.testclient import TestClient
+
+      # The TestClient is the idiomatic way to test FastAPI applications.
+      client = TestClient(app)
+
+      # 1. Test the root endpoint
+      response_root = client.get("/")
+      assert response_root.status_code == 200
+      assert response_root.json() == {"message": "Welcome to the Model Serving API. Use the /docs endpoint to see the API documentation."}
+
+      # 2. Test the prediction endpoint with valid data
+      test_payload = {"features": [5.1, 3.5, 1.4, 0.2]}
+      response_predict = client.post("/{{ endpoint_path }}", json=test_payload)
+      
+      assert response_predict.status_code == 200
+      response_data = response_predict.json()
+      assert "prediction" in response_data
+      assert "class_name" in response_data
+      assert response_data["class_name"] in CLASS_NAMES
+
+      # 3. Test with invalid data (FastAPI handles this automatically)
+      invalid_payload = {"features": ["a", "b", "c", "d"]}
+      response_invalid = client.post("/{{ endpoint_path }}", json=invalid_payload)
+      assert response_invalid.status_code == 422 # 422 Unprocessable Entity
+
+      print("FastAPI model serving validation passed.")
+      
+      # Clean up the dummy model file
+      os.remove(MODEL_FILENAME)
