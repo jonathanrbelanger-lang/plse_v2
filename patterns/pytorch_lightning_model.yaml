@@ -1,0 +1,111 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.full_model"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn)"
+  description: |
+    Demonstrates how to structure a complete model using a pytorch_lightning.LightningModule.
+    This pattern encapsulates the model architecture (nn.Module), the training step logic
+    (loss computation), the validation step, and the optimizer configuration into a
+    single, organized class.
+  tags: [pytorch, pytorch-lightning, best-practice, training-loop, transformer]
+  pedagogy:
+    concept: "PyTorch Lightning Module for Training"
+    difficulty: "advanced"
+
+instruction: "Create a complete PyTorch Lightning module for a Transformer-based model. The module should include an embedding layer, encoder layers, a prediction head, and define the `training_step`, `validation_step`, and `configure_optimizers` methods using the {{ optimizer_choice }} optimizer."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the LightningModule class."
+    default: "LitTransformer"
+    constraints:
+      options: ["LitTransformer", "MyModel", "LanguageModel"]
+  learning_rate:
+    type: "choice"
+    description: "The learning rate for the optimizer."
+    default: 0.0003
+    constraints:
+      options: [0.001, 0.0003, 0.0001]
+  optimizer_choice:
+    type: "choice"
+    description: "The optimizer to use for training."
+    default: "AdamW"
+    constraints:
+      options: ["AdamW", "SGD"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "pytorch_lightning as pl"
+
+template: |
+  class {{ class_name }}(pl.LightningModule):
+      def __init__(self, vocab_size: int, d_model: int, nhead: int, num_layers: int, learning_rate: float = {{ learning_rate }}):
+          super().__init__()
+          self.save_hyperparameters()
+
+          self.embedding = nn.Embedding(vocab_size, d_model)
+          encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, batch_first=True)
+          self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
+          self.output_head = nn.Linear(d_model, vocab_size)
+
+      def forward(self, src: torch.Tensor) -> torch.Tensor:
+          # A standard Transformer forward pass
+          embedded = self.embedding(src)
+          encoded = self.transformer_encoder(embedded)
+          return self.output_head(encoded)
+
+      def _calculate_loss(self, batch):
+          x, y = batch
+          logits = self(x)
+          # Reshape for CrossEntropyLoss: (Batch, Classes, SeqLen)
+          loss = nn.functional.cross_entropy(logits.view(-1, self.hparams.vocab_size), y.view(-1))
+          return loss
+
+      def training_step(self, batch, batch_idx):
+          loss = self._calculate_loss(batch)
+          self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+          return loss
+
+      def validation_step(self, batch, batch_idx):
+          loss = self._calculate_loss(batch)
+          self.log('val_loss', loss, on_epoch=True)
+
+      def configure_optimizers(self):
+  {% if optimizer_choice == 'AdamW' %}
+          # Use the AdamW optimizer
+          optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+  {% elif optimizer_choice == 'SGD' %}
+          # Use the SGD optimizer with momentum
+          optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.learning_rate, momentum=0.9)
+  {% endif %}
+          return optimizer
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test model instantiation and a single forward pass
+      VOCAB_SIZE = 100
+      D_MODEL = 32
+      NHEAD = 4
+      NUM_LAYERS = 2
+      
+      model = {{ class_name }}(
+          vocab_size=VOCAB_SIZE,
+          d_model=D_MODEL,
+          nhead=NHEAD,
+          num_layers=NUM_LAYERS
+      )
+      
+      # Create a dummy input batch (Batch Size=2, Sequence Length=10)
+      dummy_input = torch.randint(0, VOCAB_SIZE, (2, 10))
+      
+      # Check if forward pass runs without errors
+      output = model(dummy_input)
+      
+      # Check output shape
+      assert output.shape == (2, 10, VOCAB_SIZE)
+      print("Model instantiation and forward pass test passed.")```
