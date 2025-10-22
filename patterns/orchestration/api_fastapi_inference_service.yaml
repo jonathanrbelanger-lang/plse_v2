@@ -1,0 +1,159 @@
+plse_version: "2.0"
+pattern_id: "orchestration_api_fastapi_inference_service"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a complete, runnable FastAPI application for serving a PyTorch model.
+    This pattern teaches several critical MLOps and software engineering concepts:
+    1. Loading a model at application startup to avoid cold-start latency.
+    2. Using Pydantic for robust request and response data validation.
+    3. Creating a clean, asynchronous `/predict` endpoint.
+    4. Packaging the server for execution with a production-grade ASGI server like Uvicorn.
+  tags: [orchestration, python, pytorch, fastapi, pydantic, api, deployment, mlops, best-practice]
+  pedagogy:
+    concept: "Deploying a PyTorch Model as a FastAPI Service"
+    difficulty: "expert"
+
+instruction: "Write a complete Python script for a FastAPI application that serves a pre-trained PyTorch image classification model. The application should load the model on startup, define a `/predict` endpoint that accepts an image file, and return the predicted class and confidence score in a JSON response."
+
+parameters:
+  model_architecture:
+    type: "choice"
+    description: "The torchvision model architecture to load."
+    default: "resnet18"
+    constraints:
+      options: ["resnet18", "mobilenet_v2"]
+  num_classes:
+    type: "int"
+    description: "The number of output classes for the model's final layer."
+    default: 10
+
+requires: [torch, torchvision, fastapi, uvicorn, pydantic, python-multipart, PIL]
+
+components:
+  imports: |
+    # Core application libraries
+    import io
+    from fastapi import FastAPI, UploadFile, File, HTTPException
+    from pydantic import BaseModel
+    import torch
+    import torch.nn as nn
+    from torchvision import models, transforms
+    from PIL import Image
+    from contextlib import asynccontextmanager
+
+  data_setup: |
+    # This block defines the Pydantic models for data validation.
+    # This is a key best practice for robust APIs.
+    class PredictionResponse(BaseModel):
+        predicted_class: int
+        confidence: float
+        model_architecture: str
+
+  training_loop: |
+    # This block is repurposed to hold our model and preprocessing logic.
+    
+    # Global dictionary to hold our model and other artifacts
+    ml_models = {}
+
+    def get_inference_transforms():
+        """Returns the image transformations for inference."""
+        return transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+    def load_model():
+        """Loads and prepares the PyTorch model."""
+        print("Loading model '{{ model_architecture }}'...")
+        if "{{ model_architecture }}" == "resnet18":
+            model = models.resnet18(weights=None)
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, {{ num_classes }})
+        else: # mobilenet_v2
+            model = models.mobilenet_v2(weights=None)
+            num_ftrs = model.classifier[1].in_features
+            model.classifier[1] = nn.Linear(num_ftrs, {{ num_classes }})
+        
+        # In a real app, you would load a state_dict from a file.
+        # Here, we use the randomly initialized weights for a runnable example.
+        model.eval() # Set to evaluation mode
+        return model
+
+  model_definition: |
+    # This is the main execution block, containing the FastAPI app definition,
+    # the lifespan event handler for model loading, and the prediction endpoint.
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # --- Startup Event ---
+        # This code runs once when the application starts.
+        # It's the perfect place to load the model to avoid cold starts.
+        print("Application startup...")
+        ml_models["device"] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        ml_models["model"] = load_model().to(ml_models["device"])
+        ml_models["transforms"] = get_inference_transforms()
+        print("Model loaded and ready.")
+        yield
+        # --- Shutdown Event ---
+        # This code runs once when the application shuts down.
+        print("Application shutdown...")
+        ml_models.clear()
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.get("/")
+    def read_root():
+        return {"message": "PyTorch Inference API is running."}
+
+    @app.post("/predict/", response_model=PredictionResponse)
+    async def predict(file: UploadFile = File(...)):
+        """
+        Accepts an image file, preprocesses it, and returns a prediction.
+        """
+        # Read image file
+        try:
+            contents = await file.read()
+            image = Image.open(io.BytesIO(contents)).convert("RGB")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid image file.")
+
+        # Preprocess and predict
+        transform = ml_models["transforms"]
+        input_tensor = transform(image).unsqueeze(0).to(ml_models["device"])
+
+        with torch.no_grad():
+            output = ml_models["model"](input_tensor)
+            probabilities = torch.nn.functional.softmax(output[0], dim=0)
+            confidence, predicted_class = torch.max(probabilities, 0)
+
+        return {
+            "predicted_class": predicted_class.item(),
+            "confidence": confidence.item(),
+            "model_architecture": "{{ model_architecture }}"
+        }
+
+    # To run this application:
+    # 1. Save the code as `main.py`.
+    # 2. Run `uvicorn main:app --reload` in your terminal.
+    # 3. Go to http://127.0.0.1:8000/docs for the interactive API documentation.
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This validation is conceptual. It checks that the generated code
+      # contains the key architectural components of a FastAPI application.
+      # A full end-to-end test would require running a live server, which is
+      # too complex for our current validation pipeline.
+      
+      assert "app = FastAPI(lifespan=lifespan)" in __raw_code__
+      assert "@app.post(\"/predict/\"" in __raw_code__
+      assert "class PredictionResponse(BaseModel):" in __raw_code__
+      assert "model.eval()" in __raw_code__
+      assert "with torch.no_grad():" in __raw_code__
+      
+      print("Orchestration pattern validation passed: Key FastAPI components are present.")
