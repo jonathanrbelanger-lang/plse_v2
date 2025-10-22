@@ -1,0 +1,120 @@
+plse_version: "2.0"
+pattern_id: "pytorch.training.gradient_clipping"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the use of gradient clipping to prevent the exploding gradients
+    problem during neural network training. This pattern shows how to use
+    `torch.nn.utils.clip_grad_norm_` at the correct point in the training loop
+    to ensure stability.
+  tags: [pytorch, training, optimizer, gradient-clipping, best-practice, stability]
+  pedagogy:
+    concept: "Gradient Clipping for Training Stability"
+    difficulty: "intermediate"
+
+instruction: "Write a PyTorch training step that implements gradient clipping. The script should calculate the loss, perform a backward pass, and then use `torch.nn.utils.clip_grad_norm_` to clip the gradients of the model's parameters to a max norm of `{{ max_norm }}` before the optimizer step."
+
+parameters:
+  max_norm:
+    type: "choice"
+    description: "The maximum allowed norm for the gradients."
+    default: 1.0
+    constraints:
+      options: [1.0, 5.0, 10.0]
+  optimizer_type:
+    type: "choice"
+    description: "The optimizer to use in the example."
+    default: "AdamW"
+    constraints:
+      options: ["AdamW", "SGD"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "torch.optim as optim"
+
+template: |
+  import torch
+  import torch.nn as nn
+  import torch.optim as optim
+
+  # --- 1. Setup a dummy model, optimizer, and data ---
+  model = nn.Linear(10, 2)
+  
+  {% if optimizer_type == 'AdamW' %}
+  optimizer = optim.AdamW(model.parameters(), lr=0.01)
+  {% elif optimizer_type == 'SGD' %}
+  optimizer = optim.SGD(model.parameters(), lr=0.01)
+  {% endif %}
+  
+  loss_fn = nn.MSELoss()
+  dummy_input = torch.randn(4, 10)
+  dummy_target = torch.randn(4, 2)
+  
+  # --- 2. The Training Step with Gradient Clipping ---
+  
+  print("--- Performing a single training step with gradient clipping ---")
+  
+  # a. Zero gradients
+  optimizer.zero_grad()
+  
+  # b. Forward pass
+  output = model(dummy_input)
+  loss = loss_fn(output, dummy_target)
+  
+  # c. Backward pass to compute gradients
+  loss.backward()
+  
+  # d. CRITICAL STEP: Gradient Clipping
+  # This is done *after* .backward() and *before* .step().
+  # It rescales the gradients in-place if their total norm exceeds the threshold.
+  total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm={{ max_norm }})
+  
+  print(f"Calculated total gradient norm: {total_norm:.4f}")
+  print(f"Gradients will be clipped if norm exceeds: {{ max_norm }}")
+  
+  # e. Optimizer step
+  optimizer.step()
+  
+  print("\\n✅ Training step with gradient clipping completed successfully.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test uses mocking to verify that the clipping function was called correctly,
+      # which is a robust way to test this kind of logic.
+      from unittest.mock import patch
+
+      # Re-run the training step logic inside a test function
+      def run_test_step():
+          model_test = nn.Linear(10, 2)
+          optimizer_test = optim.AdamW(model_test.parameters())
+          loss_fn_test = nn.MSELoss()
+          input_test = torch.randn(4, 10)
+          target_test = torch.randn(4, 2)
+          
+          optimizer_test.zero_grad()
+          output = model_test(input_test)
+          loss = loss_fn_test(output, target_test)
+          loss.backward()
+          
+          # This is the function we want to spy on
+          torch.nn.utils.clip_grad_norm_(model_test.parameters(), max_norm={{ max_norm }})
+          
+          optimizer_test.step()
+
+      # Patch the function and run the test step
+      with patch('torch.nn.utils.clip_grad_norm_') as mock_clip_func:
+          run_test_step()
+          
+          # Assert that our mock was called exactly once
+          mock_clip_func.assert_called_once()
+          
+          # Assert that it was called with the correct max_norm value
+          call_args, call_kwargs = mock_clip_func.call_args
+          assert 'max_norm' in call_kwargs
+          assert call_kwargs['max_norm'] == {{ max_norm }}
+      
+      print("Gradient clipping validation passed: `clip_grad_norm_` was called correctly.")
