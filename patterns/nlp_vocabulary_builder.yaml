@@ -1,0 +1,143 @@
+plse_version: "2.0"
+pattern_id: "python.nlp.vocabulary_builder"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates a complete pipeline for building a vocabulary from a corpus of
+    text documents. This pattern covers text cleaning with regular expressions,
+    tokenization, frequency counting with `collections.Counter`, and the creation
+    of word-to-index and index-to-word mappings.
+  tags: [python, nlp, data-processing, tokenization, vocabulary, best-practice]
+  pedagogy:
+    concept: "NLP Vocabulary Creation"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that defines functions to clean and tokenize text. The script should then use these functions to process a dictionary of documents, build a vocabulary using `collections.Counter`, and create `word_to_int` and `int_to_word` mappings."
+
+parameters:
+  min_freq:
+    type: "choice"
+    description: "The minimum word frequency required to be included in the vocabulary."
+    default: 1
+    constraints:
+      options: [1, 2, 5]
+  unk_token:
+    type: "choice"
+    description: "The token to use for unknown words."
+    default: "<UNK>"
+    constraints:
+      options: ["<UNK>", "[UNK]", "UNKNOWN"]
+  pad_token:
+    type: "choice"
+    description: "The token to use for padding sequences."
+    default: "<PAD>"
+    constraints:
+      options: ["<PAD>", "[PAD]", "PADDING"]
+
+requires:
+  - "re"
+  - "from collections import Counter"
+  - "typing"
+
+template: |
+  import re
+  from collections import Counter
+  from typing import List, Dict, Tuple
+
+  def clean_text(text: str) -> str:
+      """Removes special characters and extra whitespace from text."""
+      # Remove non-alphanumeric characters but keep spaces
+      text = re.sub(r'[^a-zA-Z0-9\\s]', '', text)
+      # Replace multiple spaces with a single space
+      text = re.sub(r'\\s+', ' ', text).strip()
+      return text
+
+  def tokenize_text(text: str) -> List[str]:
+      """Converts cleaned text to a list of lowercase words."""
+      return text.lower().split()
+
+  def build_vocabulary(corpus: Dict[str, str], min_frequency: int = {{ min_freq }}) -> Dict[str, int]:
+      """
+      Builds a word frequency dictionary from a corpus of documents.
+      """
+      all_words = []
+      for text in corpus.values():
+          cleaned_text = clean_text(text)
+          tokens = tokenize_text(cleaned_text)
+          all_words.extend(tokens)
+      
+      word_counts = Counter(all_words)
+      
+      # Filter vocabulary by minimum frequency
+      vocabulary = {
+          word: count for word, count in word_counts.items() 
+          if count >= min_frequency
+      }
+      return vocabulary
+
+  def create_mappings(vocabulary: Dict[str, int]) -> Tuple[Dict[str, int], Dict[int, str]]:
+      """
+      Creates word-to-index and index-to-word mappings.
+      """
+      # Sort words by frequency for consistent mapping
+      sorted_words = sorted(vocabulary.keys(), key=vocabulary.get, reverse=True)
+      
+      # Add special tokens for unknown words and padding
+      word_to_int = {"{{ unk_token }}": 0, "{{ pad_token }}": 1}
+      
+      # Assign an integer index to each word
+      for i, word in enumerate(sorted_words, 2): # Start indexing from 2
+          word_to_int[word] = i
+          
+      int_to_word = {idx: word for word, idx in word_to_int.items()}
+      
+      return word_to_int, int_to_word
+
+  # --- Main Execution ---
+  if __name__ == "__main__":
+      # 1. Define a sample corpus of documents
+      corpus = {
+          "doc1": "The quick brown fox jumps over the lazy dog.",
+          "doc2": "A quick brown dog is not a lazy fox."
+      }
+      
+      # 2. Build the vocabulary
+      vocabulary = build_vocabulary(corpus)
+      
+      # 3. Create the mappings
+      word_to_int, int_to_word = create_mappings(vocabulary)
+      
+      print("--- Vocabulary ---")
+      print(vocabulary)
+      print("\\n--- Word to Int Mapping ---")
+      print(word_to_int)
+      print("\\n--- Int to Word Mapping ---")
+      print(int_to_word)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the full pipeline
+      test_corpus = {"doc1": "hello world", "doc2": "hello python world"}
+      vocab = build_vocabulary(test_corpus, min_frequency=1)
+      w2i, i2w = create_mappings(vocab)
+      
+      # 1. Check special tokens
+      assert w2i["{{ unk_token }}"] == 0
+      assert w2i["{{ pad_token }}"] == 1
+      
+      # 2. Check vocabulary content and order (sorted by frequency)
+      assert w2i["hello"] == 2 # 'hello' appears twice
+      assert w2i["world"] == 3 # 'world' appears twice
+      assert w2i["python"] == 4 # 'python' appears once
+      
+      # 3. Check reverse mapping
+      assert i2w[4] == "python"
+      
+      # 4. Test filtering by frequency
+      vocab_filtered = build_vocabulary(test_corpus, min_frequency=2)
+      assert "python" not in vocab_filtered, "Word with frequency < 2 was not filtered."
+      
+      print("NLP vocabulary builder validation passed.")
