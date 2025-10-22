@@ -1,0 +1,106 @@
+plse_version: "2.0"
+pattern_id: "python.anti_pattern.mutable_default_argument"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the dangerous anti-pattern of using a mutable object (like a list
+    or dictionary) as a default function argument. This paired pattern shows how
+    the default object is shared across all calls, leading to unexpected side
+    effects, and contrasts it with the correct idiom of using `None` as a sentinel.
+  tags: [python, core-language, anti-pattern, correctness, functions, gotcha]
+  pedagogy:
+    concept: "Handling Mutable Default Arguments"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following function has a bug where subsequent calls unexpectedly affect each other. Identify the flaw related to the mutable default argument and refactor it.{% else %}Write an idiomatic Python function that safely appends an item to a list, creating a new list if one is not provided. Use `None` as the default value for the list argument.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  func_name:
+    type: "choice"
+    description: "The name of the function."
+    default: "add_item"
+    constraints:
+      options: ["add_item", "append_to_list", "add_log_entry"]
+
+requires:
+  - "typing"
+
+template: |
+  from typing import List, Optional, Any
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Using a mutable default argument ---
+  def {{ func_name }}(item: Any, target_list: List[Any] = []) -> List[Any]:
+      """
+      This function contains a common and dangerous bug. The default `[]`
+      is created only ONCE, when the function is defined. All calls that
+      use the default will share and modify the SAME list object.
+      """
+      target_list.append(item)
+      return target_list
+
+  {% else %}
+  # --- CORRECT PATTERN: Using `None` as a sentinel ---
+  def {{ func_name }}(item: Any, target_list: Optional[List[Any]] = None) -> List[Any]:
+      """
+      This is the idiomatic and safe way to handle mutable default arguments.
+      A new list is created inside the function if one is not provided.
+      """
+      if target_list is None:
+          target_list = []
+      target_list.append(item)
+      return target_list
+  {% endif %}
+
+  # --- Demonstration ---
+  if __name__ == "__main__":
+      print("--- First call ---")
+      list_a = {{ func_name }}("first_item")
+      print(f"Result of first call: {list_a}")
+
+      print("\\n--- Second call ---")
+      list_b = {{ func_name }}("second_item")
+      print(f"Result of second call: {list_b}")
+      
+      {% if is_anti_pattern %}
+      print("\\n--- Analysis ---")
+      print("BUG: The second call unexpectedly modified the result of the first!")
+      print(f"Value of list_a is now: {list_a}")
+      assert list_a is list_b
+      print("This is because both variables point to the exact same list object in memory.")
+      {% else %}
+      print("\\n--- Analysis ---")
+      print("CORRECT: The second call did not affect the first.")
+      print(f"Value of list_a is still: {list_a}")
+      assert list_a is not list_b
+      print("This is because each call correctly created a new list object.")
+      {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test is designed to FAIL on the anti-pattern and PASS on the solution.
+      
+      # Call the function twice, relying on the default argument.
+      result1 = {{ func_name }}(1)
+      result2 = {{ func_name }}(2)
+      
+      {% if is_anti_pattern %}
+      # For the anti-pattern, we assert the buggy behavior occurs.
+      assert result1 == [1, 2], "The first list was unexpectedly modified."
+      assert result2 == [1, 2], "The second list did not start empty."
+      assert result1 is result2, "The function should have returned the same list object for both calls."
+      print("Mutable default argument anti-pattern validated (bug confirmed).")
+      {% else %}
+      # For the correct pattern, we assert the expected, safe behavior.
+      assert result1 == [1], "The first list should only contain its own item."
+      assert result2 == [2], "The second list should have started empty and only contain its own item."
+      assert result1 is not result2, "The function should return a new list object for each call."
+      print("Correct handling of mutable default argument validated.")
+      {% endif %}
