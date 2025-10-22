@@ -1,0 +1,104 @@
+plse_version: "2.0"
+pattern_id: "pytorch.layers.multi_output_head"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates how to create a multi-output prediction head in PyTorch. This
+    pattern uses an `nn.ModuleDict` to create a separate output layer for each
+    prediction target. This is a common architecture for multi-task learning or
+    predicting multiple distinct attributes from a single set of features.
+  tags: [pytorch, multi-task, multi-output, architecture, best-practice]
+  pedagogy:
+    concept: "Multi-Output Model Architecture"
+    difficulty: "intermediate"
+
+instruction: "Write a PyTorch `nn.Module` named `{{ class_name }}` that acts as a multi-output prediction head. It should accept a dictionary defining the names and output dimensions of each head. The forward pass must return a dictionary of logits, with one entry for each head."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the multi-output head class."
+    default: "MultiTaskHead"
+    constraints:
+      options: ["MultiTaskHead", "PredictionHead", "MultiOutputLayer"]
+  input_dim_var:
+    type: "choice"
+    description: "The variable name for the input feature dimension."
+    default: "input_dim"
+    constraints:
+      options: ["input_dim", "feature_size", "d_model"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "typing"
+
+template: |
+  from typing import Dict
+
+  class {{ class_name }}(nn.Module):
+      """
+      A prediction head with multiple, independent output layers for multi-task learning.
+      """
+      def __init__(self, {{ input_dim_var }}: int, output_dims: Dict[str, int]):
+          """
+          Args:
+              {{ input_dim_var }}: The size of the input feature vector.
+              output_dims: A dictionary where keys are head names and values are
+                           the number of output neurons for that head.
+          """
+          super().__init__()
+          
+          # nn.ModuleDict is the best practice for creating a dictionary of layers.
+          # It correctly registers all layers so they are tracked by the model.
+          self.heads = nn.ModuleDict({
+              name: nn.Linear({{ input_dim_var }}, dim)
+              for name, dim in output_dims.items()
+          })
+
+      def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+          """
+
+          Args:
+              x: The input tensor of shared features, shape (batch_size, {{ input_dim_var }}).
+
+          Returns:
+              A dictionary where keys are head names and values are the raw
+              logit tensors from each corresponding output layer.
+          """
+          return {name: head(x) for name, head in self.heads.items()}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # 1. Define the configuration for the multi-output head
+      INPUT_DIM = 128
+      OUTPUT_DIMS = {
+          "task_a_classification": 10,  # e.g., 10 classes
+          "task_b_regression": 1,       # e.g., a single continuous value
+          "task_c_auxiliary": 3         # e.g., 3 auxiliary classes
+      }
+      
+      # 2. Instantiate the model
+      multi_head_model = {{ class_name }}(
+          {{ input_dim_var }}=INPUT_DIM,
+          output_dims=OUTPUT_DIMS
+      )
+      
+      # 3. Create a dummy input batch
+      batch_size = 4
+      dummy_features = torch.randn(batch_size, INPUT_DIM)
+      
+      # 4. Perform a forward pass
+      output_dict = multi_head_model(dummy_features)
+      
+      # 5. Validate the output
+      assert isinstance(output_dict, dict), "The model should return a dictionary."
+      assert set(output_dict.keys()) == set(OUTPUT_DIMS.keys()), "Output dictionary keys do not match expected head names."
+      
+      assert output_dict["task_a_classification"].shape == (batch_size, 10), "Shape of task_a output is incorrect."
+      assert output_dict["task_b_regression"].shape == (batch_size, 1), "Shape of task_b output is incorrect."
+      
+      print("Multi-output prediction head validation passed successfully.")
