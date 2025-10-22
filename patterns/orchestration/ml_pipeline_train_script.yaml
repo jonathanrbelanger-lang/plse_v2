@@ -1,0 +1,184 @@
+plse_version: "2.0"
+pattern_id: "orchestration_ml_pipeline_pytorch_train_script"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a complete, executable PyTorch training script for an image classification task.
+    This pattern demonstrates the full orchestration convention, including command-line argument
+    parsing with argparse, modular helper functions for data loading and training, model
+    checkpointing, and a clear execution entry point. It teaches the LLM how to structure
+    a reproducible and configurable ML training pipeline.
+  tags: [orchestration, python, pytorch, mlops, cli, training, script, best-practice]
+  pedagogy:
+    concept: "Structuring a PyTorch Training Script for Reproducibility and Configurability"
+    difficulty: "expert"
+
+instruction: |
+  Write a complete Python script to train a {{ model_architecture }} model on an image classification task.
+  The script should be configurable via command-line arguments for the learning rate, number of epochs,
+  and batch size. It must save the best performing model checkpoint to a file named 'best_model.pth'.
+
+parameters:
+  model_architecture:
+    type: "choice"
+    description: "The torchvision model architecture to use."
+    default: "resnet18"
+    constraints:
+      options: ["resnet18", "resnet34", "vgg16"]
+  optimizer_choice:
+    type: "choice"
+    description: "The optimizer to use for training."
+    default: "Adam"
+    constraints:
+      options: ["Adam", "SGD"]
+  learning_rate:
+    type: "float"
+    description: "The learning rate for the optimizer."
+    default: 0.001
+  num_epochs:
+    type: "int"
+    description: "Number of training epochs."
+    default: 10
+
+requires: [torch, torchvision, argparse]
+
+components:
+  imports: |
+    # This block contains all necessary imports for the entire script.
+    import argparse
+    import os
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torchvision import datasets, models, transforms
+    from torch.utils.data import DataLoader
+
+  data_setup: |
+    # This block defines a helper function for data loading and transformations.
+    # In the orchestration convention, this is an ancillary code block.
+    def get_dataloaders(batch_size: int, num_workers: int = 2):
+        """Creates training and validation dataloaders using FakeData."""
+        print("Initializing dataloaders...")
+        data_transforms = {
+            'train': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+            'val': transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ]),
+        }
+        # Use FakeData for a self-contained, runnable example without downloads
+        image_datasets = {x: datasets.FakeData(size=200, image_size=(3, 224, 224), num_classes=10, transform=data_transforms[x])
+                          for x in ['train', 'val']}
+        dataloaders = {x: DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                       for x in ['train', 'val']}
+        return dataloaders
+
+  training_loop: |
+    # This block defines the core training and validation logic as a helper function.
+    def train_model(model, criterion, optimizer, dataloaders, device, num_epochs):
+        """The main training loop, including validation and model saving."""
+        best_acc = 0.0
+        for epoch in range(num_epochs):
+            print(f'Epoch {epoch+1}/{num_epochs}')
+            print('-' * 10)
+
+            for phase in ['train', 'val']:
+                model.train() if phase == 'train' else model.eval()
+                running_loss, running_corrects = 0.0, 0
+
+                for inputs, labels in dataloaders[phase]:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    optimizer.zero_grad()
+
+                    with torch.set_grad_enabled(phase == 'train'):
+                        outputs = model(inputs)
+                        _, preds = torch.max(outputs, 1)
+                        loss = criterion(outputs, labels)
+                        if phase == 'train':
+                            loss.backward()
+                            optimizer.step()
+
+                    running_loss += loss.item() * inputs.size(0)
+                    running_corrects += torch.sum(preds == labels.data)
+
+                epoch_loss = running_loss / len(dataloaders[phase].dataset)
+                epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
+                print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+
+                if phase == 'val' and epoch_acc > best_acc:
+                    best_acc = epoch_acc
+                    print(f"  -> New best validation accuracy: {best_acc:.4f}. Saving model...")
+                    torch.save(model.state_dict(), 'best_model.pth')
+        return model
+
+  evaluation: |
+    # This block is repurposed for the model/optimizer setup helper function.
+    def setup_model_and_optimizer(num_classes: int, lr: float):
+        """Initializes the model and optimizer based on parameters."""
+        print(f"Setting up model ('{{ model_architecture }}') and optimizer ('{{ optimizer_choice }}')...")
+        if "{{ model_architecture }}" == "resnet18":
+            model = models.resnet18(weights=None) # Use None for faster init
+        elif "{{ model_architecture }}" == "resnet34":
+            model = models.resnet34(weights=None)
+        else: # vgg16
+            model = models.vgg16(weights=None)
+
+        # Adjust the final layer for our number of classes
+        if hasattr(model, 'fc'):
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, num_classes)
+        elif hasattr(model, 'classifier'): # For VGG
+            num_ftrs = model.classifier[6].in_features
+            model.classifier[6] = nn.Linear(num_ftrs, num_classes)
+
+        if "{{ optimizer_choice }}" == "Adam":
+            optimizer = optim.Adam(model.parameters(), lr=lr)
+        else: # SGD
+            optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+        
+        return model, optimizer
+
+  model_definition: |
+    # This is the main execution block, containing the argparse setup,
+    # the main() function orchestrating the helpers, and the entry point.
+    def main():
+        """Main function to orchestrate the training process."""
+        parser = argparse.ArgumentParser(description="PyTorch Image Classification Training Script")
+        parser.add_argument('--batch-size', type=int, default=32, help='Input batch size for training')
+        parser.add_argument('--epochs', type=int, default={{ num_epochs }}, help='Number of epochs to train')
+        parser.add_argument('--lr', type=float, default={{ learning_rate }}, help='Learning rate')
+        args = parser.parse_args()
+
+        print("Initializing...")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
+
+        # 1. Get Dataloaders (using helper from data_setup block)
+        dataloaders = get_dataloaders(args.batch_size)
+        num_classes = 10 # From FakeData
+
+        # 2. Setup Model and Optimizer (using helper from evaluation block)
+        model, optimizer = setup_model_and_optimizer(num_classes, args.lr)
+        model = model.to(device)
+        criterion = nn.CrossEntropyLoss()
+
+        # 3. Run Training (using helper from training_loop block)
+        print("\\nStarting training...")
+        train_model(model, criterion, optimizer, dataloaders, device, args.epochs)
+        print("\\nTraining complete. Best model saved to 'best_model.pth'")
+
+    if __name__ == '__main__':
+        main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This validation snippet uses our new shell_exec mode to run the script
+      # with minimal parameters. It checks for a successful exit code and the
+      # creation of the expected output artifact.
+      shell_exec: python {{ SCRIPT_PATH }} --epochs 1 --batch-size 8 && test -f best_model.pth
