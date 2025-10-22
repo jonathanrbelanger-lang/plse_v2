@@ -1,0 +1,67 @@
+plse_version: "2.0"
+pattern_id: "python.core.if_elif_else"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the fundamental conditional control flow structure in Python
+    using an `if...elif...else` block. This is the primary way to make
+    decisions and execute different code paths based on specific conditions.
+  tags: [python, core-language, control-flow, if-statement, conditionals]
+  pedagogy:
+    concept: "Conditional Logic (if/elif/else)"
+    difficulty: "beginner"
+
+instruction: "Write a Python function that takes an integer `{{ score_var }}` and returns a corresponding letter grade ('A', 'B', 'C', 'D', 'F') using an `if...elif...else` block."
+
+parameters:
+  func_name:
+    type: "choice"
+    description: "The name of the grading function."
+    default: "get_grade"
+    constraints:
+      options: ["get_grade", "calculate_letter_grade", "assign_grade"]
+  score_var:
+    type: "choice"
+    description: "The variable name for the input score."
+    default: "score"
+    constraints:
+      options: ["score", "points", "mark"]
+
+requires: []
+
+template: |
+  def {{ func_name }}({{ score_var }}: int) -> str:
+      """
+      Converts a numerical score to a letter grade using a series of checks.
+      """
+      if {{ score_var }} >= 90:
+          grade = 'A'
+      elif {{ score_var }} >= 80:
+          grade = 'B'
+      elif {{ score_var }} >= 70:
+          grade = 'C'
+      elif {{ score_var }} >= 60:
+          grade = 'D'
+      else:
+          grade = 'F'
+      
+      print(f"A score of { {{ score_var }} } receives a grade of '{grade}'.")
+      return grade
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test each branch of the conditional logic
+      assert {{ func_name }}(95) == 'A', "Failed on grade A"
+      assert {{ func_name }}(85) == 'B', "Failed on grade B"
+      assert {{ func_name }}(75) == 'C', "Failed on grade C"
+      assert {{ func_name }}(65) == 'D', "Failed on grade D"
+      assert {{ func_name }}(55) == 'F', "Failed on grade F"
+      # Test the boundary conditions
+      assert {{ func_name }}(90) == 'A', "Failed on boundary for A"
+      assert {{ func_name }}(80) == 'B', "Failed on boundary for B"
+      assert {{ func_name }}(0) == 'F', "Failed on zero score"
+      
+      print("Conditional logic pattern validation passed.")
