@@ -1,0 +1,161 @@
+plse_version: "2.0"
+pattern_id: "mlops_anti_pattern_training_serving_skew"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the critical MLOps anti-pattern of training-serving skew, where
+    different preprocessing logic between training and inference leads to silent
+    production failures. This paired pattern shows a model failing when a scaler
+    is incorrectly re-fit on inference data, versus succeeding when the original,
+    saved scaler from training is correctly applied.
+  tags: [mlops, anti-pattern, production, correctness, data-leakage, skew, sklearn, deployment]
+  pedagogy:
+    concept: "Preventing Training-Serving Skew"
+    difficulty: "expert"
+
+instruction: "{% if is_anti_pattern %}The following script simulates a production scenario where a model makes incorrect predictions due to training-serving skew. The preprocessing logic at inference time is inconsistent with the training logic. Identify this silent failure, explain its cause, and refactor the inference step to use the exact same preprocessing artifact from training.{% else %}Write a robust MLOps workflow that correctly separates training and inference. It should train a model and a preprocessor, save both artifacts, and then show how to correctly load and apply them to new data at inference time to prevent training-serving skew.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed inference logic. If false, generate the correct logic."
+    default: true
+  model_filename_var:
+    type: "choice"
+    description: "The variable name for the model's saved filename."
+    default: "model.joblib"
+    constraints:
+      options: ["model.joblib", "classifier.pkl", "predictor.bin"]
+  scaler_filename_var:
+    type: "choice"
+    description: "The variable name for the scaler's saved filename."
+    default: "scaler.joblib"
+    constraints:
+      options: ["scaler.joblib", "preprocessor.pkl", "feature_transform.bin"]
+
+requires:
+  - "numpy as np"
+  - "sklearn.preprocessing.StandardScaler"
+  - "sklearn.linear_model.LogisticRegression"
+  - "joblib"
+  - "os"
+
+template: |
+  import numpy as np
+  from sklearn.preprocessing import StandardScaler
+  from sklearn.linear_model import LogisticRegression
+  import joblib
+  import os
+
+  # --- 1. Training Simulation ---
+  # This part of the script simulates the work of a data scientist.
+  # They train a model and save the necessary artifacts (the model and the scaler).
+  print("--- (TRAINING PHASE) ---")
+  
+  # Create synthetic data where scaling is essential for good performance.
+  # Feature 1 is small scale, Feature 2 is large scale.
+  X_train = np.array([[1, 1000], [2, 1100], [3, 1200], [4, 900], [5, 800]])
+  y_train = np.array([1, 1, 1, 0, 0]) # Class 1 is associated with high values of feature 2
+
+  # Fit a scaler to the training data
+  scaler = StandardScaler()
+  X_train_scaled = scaler.fit_transform(X_train)
+
+  # Train a simple model
+  model = LogisticRegression()
+  model.fit(X_train_scaled, y_train)
+
+  # Save the artifacts for the "production" environment
+  joblib.dump(model, "{{ model_filename_var }}")
+  joblib.dump(scaler, "{{ scaler_filename_var }}")
+  print("Model and scaler have been trained and saved.")
+  print(f"Training data mean: {scaler.mean_}, std: {scaler.scale_}")
+
+
+  # --- 2. Inference Simulation ---
+  # This part simulates a production API endpoint receiving a new request.
+  print("\\n--- (INFERENCE PHASE) ---")
+  
+  # This new data point clearly belongs to Class 1
+  new_data_point = np.array([[6, 1300]])
+  print(f"Received new data point: {new_data_point}")
+
+  # Load the trained model
+  loaded_model = joblib.load("{{ model_filename_var }}")
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Inconsistent preprocessing at inference time ---
+  # The developer of the inference service creates a NEW scaler.
+  # `fit_transform` on a single data point will scale it to zero,
+  # completely changing the feature distribution the model expects.
+  print("Applying FLAWED preprocessing...")
+  inference_scaler = StandardScaler()
+  new_data_scaled = inference_scaler.fit_transform(new_data_point)
+  
+  print(f"Incorrectly scaled data: {new_data_scaled}")
+  
+  prediction = loaded_model.predict(new_data_scaled)
+  print(f"\\nModel prediction: {prediction[0]}")
+  print("ANALYSIS: The prediction is WRONG. The model fails silently because the input scaling at inference is different from training.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Use the EXACT same scaler from training ---
+  # The inference service correctly loads and uses the scaler that was
+  # saved during the training phase.
+  print("Applying CORRECT preprocessing...")
+  loaded_scaler = joblib.load("{{ scaler_filename_var }}")
+  
+  # Use `.transform()`, NOT `.fit_transform()`. This applies the original
+  # mean and std from the training data.
+  new_data_scaled = loaded_scaler.transform(new_data_point)
+  
+  print(f"Correctly scaled data: {new_data_scaled}")
+
+  prediction = loaded_model.predict(new_data_scaled)
+  print(f"\\nModel prediction: {prediction[0]}")
+  print("ANALYSIS: The prediction is CORRECT. The model succeeds because the feature scaling is consistent between training and serving.")
+  {% endif %}
+
+  # --- 3. Cleanup ---
+  os.remove("{{ model_filename_var }}")
+  os.remove("{{ scaler_filename_var }}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates the core outcome: the anti-pattern produces the
+      # wrong prediction, while the solution produces the correct one.
+      
+      # Re-run the logic in a controlled test function
+      def run_test_inference():
+          # Training
+          X_train_test = np.array([[1, 1000], [2, 1100], [3, 1200], [4, 900], [5, 800]])
+          y_train_test = np.array([1, 1, 1, 0, 0])
+          scaler_test = StandardScaler().fit(X_train_test)
+          model_test = LogisticRegression().fit(scaler_test.transform(X_train_test), y_train_test)
+          
+          # Inference data
+          new_point = np.array([[6, 1300]])
+          
+          {% if is_anti_pattern %}
+          # Flawed preprocessing
+          skewed_scaler = StandardScaler()
+          scaled_point = skewed_scaler.fit_transform(new_point)
+          {% else %}
+          # Correct preprocessing
+          scaled_point = scaler_test.transform(new_point)
+          {% endif %}
+          
+          return model_test.predict(scaled_point)[0]
+
+      final_prediction = run_test_inference()
+      
+      {% if is_anti_pattern %}
+      assert final_prediction == 0, "The skewed preprocessing should lead to an incorrect prediction of 0."
+      print("Validation passed: Correctly identified that skew causes a prediction failure.")
+      {% else %}
+      assert final_prediction == 1, "The consistent preprocessing should lead to a correct prediction of 1."
+      print("Validation passed: Correctly identified that consistency leads to a successful prediction.")
+      {% endif %}
