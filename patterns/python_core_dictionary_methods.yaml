@@ -1,0 +1,91 @@
+plse_version: "2.0"
+pattern_id: "python.core.dictionary_methods"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates idiomatic and safe ways to interact with Python dictionaries.
+    This pattern covers using the `.get()` method for safe key access with a
+    default value, and the `.setdefault()` method to initialize keys that may
+    not exist.
+  tags: [python, core-language, dictionary, best-practice, idiomatic]
+  pedagogy:
+    concept: "Advanced Dictionary Methods"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that demonstrates the use of the dictionary `{{ method_to_show }}` method. The script should attempt to access both an existing and a non-existing key to show how the method works."
+
+parameters:
+  method_to_show:
+    type: "choice"
+    description: "The specific dictionary method to demonstrate."
+    default: "get"
+    constraints:
+      options: ["get", "setdefault"]
+  dict_name:
+    type: "choice"
+    description: "The variable name for the dictionary."
+    default: "data"
+    constraints:
+      options: ["data", "user_profile", "inventory"]
+
+requires: []
+
+template: |
+  # --- Setup ---
+  {{ dict_name }} = {"name": "Alice", "items": 3}
+  existing_key = "name"
+  missing_key = "age"
+
+  print(f"Initial dictionary: { {{ dict_name }} }")
+
+  {% if method_to_show == 'get' %}
+  # --- Demonstrate the .get() method ---
+  print("\\n--- Using .get() for safe access ---")
+  
+  # Accessing an existing key
+  value_exists = {{ dict_name }}.get(existing_key)
+  print(f"Value for '{existing_key}': {value_exists}")
+
+  # Accessing a missing key without a default (returns None)
+  value_missing = {{ dict_name }}.get(missing_key)
+  print(f"Value for '{missing_key}' (no default): {value_missing}")
+
+  # Accessing a missing key with a default value
+  default_value = 25
+  value_missing_default = {{ dict_name }}.get(missing_key, default_value)
+  print(f"Value for '{missing_key}' (with default): {value_missing_default}")
+
+  print(f"Dictionary after .get(): { {{ dict_name }} } (unchanged)")
+
+  {% elif method_to_show == 'setdefault' %}
+  # --- Demonstrate the .setdefault() method ---
+  print("\\n--- Using .setdefault() to initialize keys ---")
+
+  # Using it on an existing key does nothing and returns the existing value
+  existing_value = {{ dict_name }}.setdefault(existing_key, "Bob")
+  print(f"setdefault on '{existing_key}': returned '{existing_value}'")
+  print(f"Dictionary state: { {{ dict_name }} } (unchanged)")
+
+  # Using it on a missing key sets the default value and returns it
+  missing_value = {{ dict_name }}.setdefault(missing_key, 25)
+  print(f"setdefault on '{missing_key}': returned '{missing_value}'")
+  print(f"Dictionary state: { {{ dict_name }} } (MODIFIED)")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      {% if method_to_show == 'get' %}
+      assert value_exists == "Alice"
+      assert value_missing is None
+      assert value_missing_default == 25
+      assert "age" not in {{ dict_name }}, ".get() should not modify the dictionary."
+      print(".get() method validated successfully.")
+      {% elif method_to_show == 'setdefault' %}
+      assert existing_value == "Alice"
+      assert missing_value == 25
+      assert {{ dict_name }}["age"] == 25, ".setdefault() failed to add the missing key."
+      print(".setdefault() method validated successfully.")
+      {% endif %}
