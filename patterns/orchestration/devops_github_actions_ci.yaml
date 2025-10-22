@@ -1,5 +1,5 @@
 plse_version: "2.0"
-pattern_id: "orchestration_devops_github_actions_ci"
+pattern_id: "orchestration.devops.github_actions_ci"
 
 metadata:
   author: "PLSE v2.0 Orchestration Library"
@@ -30,16 +30,12 @@ parameters:
     description: "The second Python version to test against."
     default: "3.11"
 
-requires: [] # The generated artifact is YAML, not Python
+requires: []
 
 components:
   model_definition: |
-    # This is a GitHub Actions workflow file, typically located at .github/workflows/ci.yml
-    # It automates the testing and validation of the project.
-
     name: {{ workflow_name }}
 
-    # Define the triggers for this workflow.
     on:
       push:
         branches: [ "main" ]
@@ -48,78 +44,58 @@ components:
 
     jobs:
       build:
-        # The 'strategy.matrix' allows running the job on multiple configurations.
-        # Here, we test on two operating systems and two Python versions.
         strategy:
           matrix:
             os: [ubuntu-latest, windows-latest]
             python-version: ["{{ python_version_1 }}", "{{ python_version_2 }}"]
 
-        runs-on: ${{ matrix.os }}
+        {% raw %}runs-on: ${{ matrix.os }}{% endraw %}
 
         steps:
-        # Step 1: Check out the repository's code
         - name: Checkout repository
           uses: actions/checkout@v4
 
-        # Step 2: Set up the specified Python version
-        - name: Set up Python ${{ matrix.python-version }}
+        - name: Set up Python {% raw %}${{ matrix.python-version }}{% endraw %}
           uses: actions/setup-python@v5
           with:
-            python-version: ${{ matrix.python-version }}
+            python-version: {% raw %}${{ matrix.python-version }}{% endraw %}
 
-        # Step 3: Cache dependencies for faster subsequent runs
-        # This is a critical optimization for CI pipelines.
         - name: Cache pip dependencies
           uses: actions/cache@v4
           with:
             path: ~/.cache/pip
-            key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
+            key: {% raw %}${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}{% endraw %}
             restore-keys: |
-              ${{ runner.os }}-pip-
+              {% raw %}${{ runner.os }}-pip-{% endraw %}
 
-        # Step 4: Install project dependencies
         - name: Install dependencies
           run: |
             python -m pip install --upgrade pip
             pip install -e .[dev]
 
-        # Step 5: Lint the code with a fast, modern linter like ruff
         - name: Lint with ruff
           run: |
             ruff check .
 
-        # Step 6: Run the test suite with pytest
         - name: Test with pytest
           run: |
             pytest
 
 validation:
-  linter_checks: false # Not applicable to YAML files
+  linter_checks: false
   unit_test_snippets:
     - |
-      # This validation checks the generated YAML for syntactic correctness
-      # and the presence of key architectural components of a CI pipeline.
       import yaml
-
       try:
-          # Attempt to parse the generated content as YAML
           workflow_data = yaml.safe_load('''{{ __raw_code__ }}''')
-          
-          # Check for key structural elements
-          assert 'on' in workflow_data, "Workflow must have an 'on' trigger."
-          assert 'jobs' in workflow_data, "Workflow must have a 'jobs' section."
-          assert 'build' in workflow_data['jobs'], "A 'build' job is expected."
-          
+          assert 'on' in workflow_data
+          assert 'jobs' in workflow_data
+          assert 'build' in workflow_data['jobs']
           steps = workflow_data['jobs']['build']['steps']
           step_names = [step.get('name', '') for step in steps]
-          
           assert "Checkout repository" in step_names
           assert "Install dependencies" in step_names
           assert "Test with pytest" in step_names
-          
           print("Orchestration pattern validation passed: GitHub Actions workflow is structurally sound.")
-          
       except yaml.YAMLError as e:
-          # This will fail if the generated content is not valid YAML
           raise AssertionError(f"Generated content is not valid YAML: {e}") from e
