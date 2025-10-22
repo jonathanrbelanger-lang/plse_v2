@@ -1,0 +1,97 @@
+plse_version: "2.0"
+pattern_id: "python_anti_pattern_not_using_generators"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Contrasts creating a large list in memory using a list comprehension with the
+    memory-efficient alternative of using a generator expression. This paired
+    pattern demonstrates the significant space complexity difference between eager
+    and lazy evaluation for one-time iteration tasks.
+  tags: [python, core-language, anti-pattern, performance, memory, generators, iterators, best-practice]
+  pedagogy:
+    concept: "Memory-Efficient Iteration with Generators"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following script uses a list comprehension to process a large sequence, which is memory-inefficient and can cause `MemoryError`. Explain the problem and refactor it to use a memory-efficient generator expression.{% else %}Write a Python script that efficiently sums the squares of a large sequence of numbers using a generator expression to avoid creating a large list in memory.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  sequence_size:
+    type: "int"
+    description: "The number of items in the sequence to process."
+    default: 10_000_000
+  func_name:
+    type: "choice"
+    description: "The variable name for the function."
+    default: "sum_of_squares"
+    constraints:
+      options: ["sum_of_squares", "process_large_sequence", "calculate_total"]
+
+requires:
+  - "sys"
+
+template: |
+  import sys
+
+  def {{ func_name }}(n: int) -> int:
+      """
+      Calculates the sum of squares from 0 to n-1.
+      This function demonstrates the memory difference between a list and a generator.
+      """
+      print(f"Calculating sum of squares for {n:,} numbers.")
+      
+      {% if is_anti_pattern %}
+      # --- ANTI-PATTERN: Creating a large list in memory ---
+      # This list comprehension builds a list of 10 million integers.
+      # This can consume hundreds of megabytes of RAM before the sum even starts.
+      numbers = [i*i for i in range(n)]
+      print(f"Inefficient method created a list consuming ~{sys.getsizeof(numbers) / 1024 / 1024:.2f} MB of memory.")
+      
+      {% else %}
+      # --- CORRECT PATTERN: Using a memory-efficient generator expression ---
+      # The parentheses create a generator object, which produces numbers on the fly.
+      # It only holds one item in memory at a time, making its memory footprint constant and tiny.
+      numbers = (i*i for i in range(n))
+      print(f"Efficient method created a generator object consuming only {sys.getsizeof(numbers)} bytes of memory.")
+      
+      {% endif %}
+      
+      # The `sum()` function works identically on both lists and generators.
+      total = sum(numbers)
+      return total
+
+  # --- Demonstration ---
+  if __name__ == "__main__":
+      size = {{ sequence_size }}
+      result = {{ func_name }}(size)
+      print(f"\\nResult: {result:,}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that both methods produce the same numerical result,
+      # proving the generator is a functionally correct replacement for the list
+      # in this one-time iteration scenario.
+      
+      test_size = 1000
+      
+      {% if is_anti_pattern %}
+      # Run the anti-pattern logic
+      numbers_list = [i*i for i in range(test_size)]
+      result = sum(numbers_list)
+      {% else %}
+      # Run the correct pattern logic
+      numbers_gen = (i*i for i in range(test_size))
+      result = sum(numbers_gen)
+      {% endif %}
+      
+      # The expected sum of squares for n=1000 is 332,833,500
+      expected_result = sum(i*i for i in range(test_size))
+      assert result == expected_result, f"Expected {expected_result}, but got {result}"
+      
+      print("Generator pattern validation passed.")
