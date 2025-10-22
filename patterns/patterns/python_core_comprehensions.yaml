@@ -1,0 +1,110 @@
+plse_version: "2.0"
+pattern_id: "python.core.comprehensions"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the Pythonic use of comprehensions (list, dictionary, and set)
+    as a concise and efficient alternative to traditional for-loops for creating
+    collections. The pattern explicitly contrasts the two approaches.
+  tags: [python, core-language, comprehension, list, dict, set, idiomatic, best-practice]
+  pedagogy:
+    concept: "Collection Comprehensions"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that demonstrates a {{ comp_type }} comprehension. It should first show how to build the collection using a traditional for-loop, and then show the equivalent, more Pythonic comprehension method."
+
+parameters:
+  comp_type:
+    type: "choice"
+    description: "The type of comprehension to demonstrate."
+    default: "list"
+    constraints:
+      options: ["list", "dict", "set"]
+  iterable_name:
+    type: "choice"
+    description: "The variable name for the source iterable."
+    default: "source_data"
+    constraints:
+      options: ["source_data", "numbers", "items"]
+
+requires: []
+
+template: |
+  # --- Setup ---
+  {{ iterable_name }} = [1, 2, 2, 3, 4, 5, 5]
+  print(f"Source iterable: { {{ iterable_name }} }")
+
+  {% if comp_type == 'list' %}
+  # --- 1. Traditional for-loop method to create a list ---
+  print("\\n--- Building a List with a for-loop ---")
+  list_from_loop = []
+  for item in {{ iterable_name }}:
+      # Example: create a list of squares of even numbers
+      if item % 2 == 0:
+          list_from_loop.append(item * item)
+  print(f"Result from loop: {list_from_loop}")
+
+  # --- 2. Pythonic comprehension method ---
+  print("\\n--- Building a List with a comprehension ---")
+  list_from_comp = [item * item for item in {{ iterable_name }} if item % 2 == 0]
+  print(f"Result from comprehension: {list_from_comp}")
+
+  # --- 3. Verification ---
+  assert list_from_loop == list_from_comp
+  print("\\n✅ Results are identical.")
+
+  {% elif comp_type == 'dict' %}
+  # --- 1. Traditional for-loop method to create a dict ---
+  print("\\n--- Building a Dict with a for-loop ---")
+  dict_from_loop = {}
+  for item in {{ iterable_name }}:
+      # Example: create a dict mapping numbers to their squares
+      dict_from_loop[item] = item * item
+  print(f"Result from loop: {dict_from_loop}")
+
+  # --- 2. Pythonic comprehension method ---
+  print("\\n--- Building a Dict with a comprehension ---")
+  dict_from_comp = {item: item * item for item in {{ iterable_name }}}
+  print(f"Result from comprehension: {dict_from_comp}")
+
+  # --- 3. Verification ---
+  assert dict_from_loop == dict_from_comp
+  print("\\n✅ Results are identical.")
+
+  {% elif comp_type == 'set' %}
+  # --- 1. Traditional for-loop method to create a set ---
+  print("\\n--- Building a Set with a for-loop ---")
+  set_from_loop = set()
+  for item in {{ iterable_name }}:
+      # Example: create a set of squares
+      set_from_loop.add(item * item)
+  print(f"Result from loop: {set_from_loop}")
+
+  # --- 2. Pythonic comprehension method ---
+  print("\\n--- Building a Set with a comprehension ---")
+  set_from_comp = {item * item for item in {{ iterable_name }}}
+  print(f"Result from comprehension: {set_from_comp}")
+
+  # --- 3. Verification ---
+  assert set_from_loop == set_from_comp
+  print("\\n✅ Results are identical.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The script contains its own assertions, which is a great pattern.
+      # This test just verifies that the final variables were created.
+      {% if comp_type == 'list' %}
+      assert 'list_from_comp' in locals()
+      assert list_from_comp == [4, 16]
+      {% elif comp_type == 'dict' %}
+      assert 'dict_from_comp' in locals()
+      assert dict_from_comp == {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+      {% elif comp_type == 'set' %}
+      assert 'set_from_comp' in locals()
+      assert set_from_comp == {1, 4, 9, 16, 25}
+      {% endif %}
+      print("Comprehension pattern validation passed.")
