@@ -1,0 +1,155 @@
+plse_version: "2.0"
+pattern_id: "orchestration_ml_pipeline_pytorch_prediction_script"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a complete, executable PyTorch prediction script. This pattern
+    demonstrates the deployment side of the ML lifecycle: loading a serialized
+    model artifact, applying the exact same data transformations used in training
+    to new data, and running inference. It teaches the critical concepts of
+    model deserialization and preventing training-serving skew.
+  tags: [orchestration, python, pytorch, mlops, cli, inference, prediction, script, best-practice]
+  pedagogy:
+    concept: "Structuring a PyTorch Inference Script"
+    difficulty: "expert"
+
+instruction: |
+  Write a complete Python script that loads a pre-trained PyTorch model from a file (`{{ model_path }}`) and uses it to make a prediction on a new, unseen image. The script must correctly apply the necessary image transformations to the input data before inference.
+
+parameters:
+  model_architecture:
+    type: "choice"
+    description: "The torchvision model architecture to load."
+    default: "resnet18"
+    constraints:
+      options: ["resnet18", "resnet34", "vgg16"]
+  model_path:
+    type: "string"
+    description: "The file path to the saved model checkpoint."
+    default: "best_model.pth"
+  num_classes:
+    type: "int"
+    description: "The number of output classes for the model's final layer."
+    default: 10
+
+requires: [torch, torchvision, argparse, PIL]
+
+components:
+  imports: |
+    import argparse
+    import torch
+    import torch.nn as nn
+    from torchvision import models, transforms
+    from PIL import Image
+
+  data_setup: |
+    # This block defines the preprocessing logic. It is CRITICAL that these
+    # transformations are identical to the 'val' transforms from the training script.
+    def get_inference_transforms():
+        """Returns the image transformations for inference."""
+        return transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+    def create_dummy_image(filename="dummy_image.png"):
+        """Creates a dummy image file for the script to predict on."""
+        try:
+            img = Image.new('RGB', (300, 300), color = 'red')
+            img.save(filename)
+            return filename
+        except Exception as e:
+            print(f"Could not create dummy image: {e}")
+            return None
+
+  evaluation: |
+    # This block is repurposed for the model loading helper function.
+    def load_model(model_path, num_classes):
+        """Loads the model architecture and state dictionary."""
+        print(f"Loading model architecture ('{{ model_architecture }}')...")
+        if "{{ model_architecture }}" == "resnet18":
+            model = models.resnet18(weights=None)
+        elif "{{ model_architecture }}" == "resnet34":
+            model = models.resnet34(weights=None)
+        else: # vgg16
+            model = models.vgg16(weights=None)
+
+        # Reconfigure the final layer to match the trained model
+        if hasattr(model, 'fc'):
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Linear(num_ftrs, num_classes)
+        elif hasattr(model, 'classifier'):
+            num_ftrs = model.classifier[6].in_features
+            model.classifier[6] = nn.Linear(num_ftrs, num_classes)
+        
+        print(f"Loading model state from '{model_path}'...")
+        model.load_state_dict(torch.load(model_path))
+        return model
+
+  model_definition: |
+    # This is the main execution block for the prediction script.
+    def main():
+        """Main function to orchestrate the inference process."""
+        parser = argparse.ArgumentParser(description="PyTorch Image Classification Inference Script")
+        parser.add_argument('--model-path', type=str, default="{{ model_path }}", help='Path to the trained model checkpoint')
+        parser.add_argument('--image-path', type=str, required=True, help='Path to the input image')
+        args = parser.parse_args()
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
+
+        # 1. Load the trained model
+        model = load_model(args.model_path, {{ num_classes }})
+        model = model.to(device)
+        
+        # 2. Set model to evaluation mode (CRITICAL for correctness)
+        model.eval()
+
+        # 3. Load and preprocess the input image
+        try:
+            image = Image.open(args.image_path).convert("RGB")
+        except FileNotFoundError:
+            print(f"Error: Image file not found at '{args.image_path}'")
+            return
+
+        transform = get_inference_transforms()
+        input_tensor = transform(image).unsqueeze(0) # Add batch dimension
+        input_tensor = input_tensor.to(device)
+
+        # 4. Run inference
+        print("\\nRunning prediction...")
+        with torch.no_grad(): # CRITICAL for performance
+            output = model(input_tensor)
+            probabilities = torch.nn.functional.softmax(output[0], dim=0)
+            _, predicted_class = torch.max(output, 1)
+
+        print(f"Predicted Class: {predicted_class.item()}")
+        print(f"Confidence: {probabilities[predicted_class.item()]:.4f}")
+
+    if __name__ == '__main__':
+        # --- Setup for a self-contained run ---
+        # In a real scenario, the model file would already exist.
+        # Here, we create a dummy model file to make the script runnable.
+        print("--- Setting up dummy artifacts for demonstration ---")
+        dummy_model, _ = setup_model_and_optimizer({{ num_classes }}, 0.001)
+        torch.save(dummy_model.state_dict(), "{{ model_path }}")
+        dummy_image_path = create_dummy_image()
+        
+        # Add the dummy image path to the command line arguments for the main function
+        import sys
+        sys.argv.extend(['--image-path', dummy_image_path])
+        
+        main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This validation runs the generated script with its dummy setup.
+      # It checks for a successful exit code, which proves that the model loading,
+      # data preprocessing, and inference steps are all syntactically correct
+      # and run without crashing.
+      shell_exec: python {{ SCRIPT_PATH }}
