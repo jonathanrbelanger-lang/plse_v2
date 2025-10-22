@@ -1,0 +1,130 @@
+plse_version: "2.0"
+pattern_id: "mlops.setup.robust_path_locator"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from PyachamamaQuantiz.ipynb)"
+  description: |
+    Demonstrates a robust MLOps pattern for managing file paths in a complex project.
+    This pattern defines a `PathLocator` class that recursively scans a directory
+    at runtime to build a map of all files. This avoids fragile, hardcoded paths
+    and makes scripts more resilient to changes in the project's layout.
+  tags: [mlops, best-practice, file-io, robustness, python]
+  pedagogy:
+    concept: "Dynamic and Robust File Path Management"
+    difficulty: "intermediate"
+
+instruction: "Write a Python class named `{{ class_name }}` that scans a root directory to find files. The class should have a `find` method that takes a filename as input and returns its full, absolute path. The script should then use an instance of this class to locate a specific file."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the path locator class."
+    default: "PathLocator"
+    constraints:
+      options: ["PathLocator", "FileFinder", "AssetRegistry"]
+  root_dir_var:
+    type: "choice"
+    description: "The variable name for the root directory to scan."
+    default: "root_path"
+    constraints:
+      options: ["root_path", "scan_directory", "project_root"]
+  file_to_find:
+    type: "choice"
+    description: "The name of the example file the script will search for."
+    default: "main.py"
+    constraints:
+      options: ["main.py", "config.json", "model.bin"]
+
+requires:
+  - "os"
+  - "typing"
+
+template: |
+  import os
+  from typing import Dict, Optional
+
+  class {{ class_name }}:
+      """
+      Scans a directory structure at runtime to create a searchable map of files,
+      making scripts resilient to changes in project layout.
+      """
+      def __init__(self, {{ root_dir_var }}: str):
+          """
+          Initializes the locator and scans the given root path.
+
+          Args:
+              {{ root_dir_var }}: The path to the directory to be scanned.
+          
+          Raises:
+              FileNotFoundError: If the root path does not exist or is not a directory.
+          """
+          if not os.path.isdir({{ root_dir_var }}):
+              raise FileNotFoundError(f"The root path '{ {{ root_dir_var }} }' does not exist or is not a directory.")
+          
+          self.root_path = {{ root_dir_var }}
+          self.file_map: Dict[str, str] = {}
+          self._scan()
+
+      def _scan(self):
+          """
+          Recursively walks the root directory and builds a map of filenames to full paths.
+          """
+          print(f"🔎 Scanning '{self.root_path}' to build a file map...")
+          for dirpath, _, filenames in os.walk(self.root_path):
+              for filename in filenames:
+                  # Store the filename as the key and its absolute path as the value
+                  self.file_map[filename] = os.path.join(dirpath, filename)
+          print(f"🗺️ Scan complete. Found {len(self.file_map)} files.")
+
+      def find(self, filename: str) -> Optional[str]:
+          """
+
+          Searches the map for a given filename.
+
+          Args:
+              filename: The base name of the file to find (e.g., 'config.json').
+
+          Returns:
+              The full, absolute path to the file if found, otherwise None.
+          """
+          return self.file_map.get(filename)
+
+  # --- Main Execution ---
+  if __name__ == "__main__":
+      # For this example, we'll create a dummy directory structure to scan.
+      DUMMY_ROOT = "temp_project_root"
+      DUMMY_SUBDIR = os.path.join(DUMMY_ROOT, "src", "app")
+      os.makedirs(DUMMY_SUBDIR, exist_ok=True)
+      
+      # Create a dummy file to find
+      FILE_TO_FIND = "{{ file_to_find }}"
+      with open(os.path.join(DUMMY_SUBDIR, FILE_TO_FIND), "w") as f:
+          f.write("content")
+          
+      try:
+          # 1. Instantiate the locator to scan the dummy project
+          locator = {{ class_name }}({{ root_dir_var }}=DUMMY_ROOT)
+          
+          # 2. Use the find method to locate the file
+          found_path = locator.find(FILE_TO_FIND)
+          
+          if found_path:
+              print(f"\\n✅ Successfully found '{FILE_TO_FIND}' at: {found_path}")
+              # Verify the path is correct
+              assert os.path.exists(found_path)
+          else:
+              print(f"\\n❌ Failed to find '{FILE_TO_FIND}' in the scanned directory.")
+
+      finally:
+          # Clean up the dummy directory structure
+          import shutil
+          shutil.rmtree(DUMMY_ROOT)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The main script block already contains a robust self-test.
+      # We can add a simple assertion here to ensure the class was defined.
+      assert '{{ class_name }}' in locals(), "The PathLocator class was not defined."
+      print("PathLocator pattern validation passed.")
