@@ -1,0 +1,144 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.transformer_full_model"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates the complete architecture of a Transformer encoder model encapsulated
+    within a PyTorch Lightning module. This pattern shows how to combine an embedding
+    layer, sinusoidal positional encoding, multiple Transformer encoder layers, and a
+    final output head into a single, cohesive model.
+  tags: [pytorch, pytorch-lightning, transformer, nlp, architecture, best-practice]
+  pedagogy:
+    concept: "Assembling a Complete Transformer Model"
+    difficulty: "advanced"
+
+instruction: "Write a complete PyTorch Lightning module for a Transformer encoder-based language model. The class, named `{{ class_name }}`, must include an embedding layer, a `PositionalEncoding` submodule, a stack of `nn.TransformerEncoderLayer`s, and a final linear output head."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the main LightningModule class."
+    default: "LitTransformerEncoder"
+    constraints:
+      options: ["LitTransformerEncoder", "LanguageModel", "SequenceClassifier"]
+  num_layers:
+    type: "choice"
+    description: "The number of Transformer encoder layers in the stack."
+    default: 4
+    constraints:
+      options: [2, 4, 6]
+  num_heads:
+    type: "choice"
+    description: "The number of attention heads in each encoder layer."
+    default: 4
+    constraints:
+      options: [2, 4, 8]
+  d_model:
+    type: "choice"
+    description: "The embedding dimension of the model."
+    default: 128
+    constraints:
+      options: [128, 256]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "pytorch_lightning as pl"
+  - "math"
+
+template: |
+  # --- Sub-component: Positional Encoding ---
+  # This is included to make the example self-contained and runnable.
+  class PositionalEncoding(nn.Module):
+      def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+          super().__init__()
+          self.dropout = nn.Dropout(p=dropout)
+          position = torch.arange(max_len).unsqueeze(1)
+          div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+          pe = torch.zeros(1, max_len, d_model)
+          pe[0, :, 0::2] = torch.sin(position * div_term)
+          pe[0, :, 1::2] = torch.cos(position * div_term)
+          self.register_buffer('pe', pe)
+
+      def forward(self, x: torch.Tensor) -> torch.Tensor:
+          # x shape: (batch_size, seq_len, d_model)
+          x = x + self.pe[:, :x.size(1)]
+          return self.dropout(x)
+
+  # --- Main LightningModule ---
+  class {{ class_name }}(pl.LightningModule):
+      def __init__(
+          self,
+          vocab_size: int,
+          d_model: int = {{ d_model }},
+          nhead: int = {{ num_heads }},
+          num_encoder_layers: int = {{ num_layers }},
+          dim_feedforward: int = 512,
+          dropout: float = 0.1,
+          learning_rate: float = 1e-4
+      ):
+          super().__init__()
+          self.save_hyperparameters()
+
+          # 1. Token Embedding Layer
+          self.embedding = nn.Embedding(self.hparams.vocab_size, self.hparams.d_model)
+          
+          # 2. Positional Encoding Layer
+          self.pos_encoder = PositionalEncoding(self.hparams.d_model, self.hparams.dropout)
+          
+          # 3. Transformer Encoder Stack
+          encoder_layer = nn.TransformerEncoderLayer(
+              d_model=self.hparams.d_model,
+              nhead=self.hparams.nhead,
+              dim_feedforward=self.hparams.dim_feedforward,
+              dropout=self.hparams.dropout,
+              batch_first=True  # Critical for modern PyTorch
+          )
+          self.transformer_encoder = nn.TransformerEncoder(
+              encoder_layer,
+              num_layers=self.hparams.num_encoder_layers
+          )
+          
+          # 4. Final Output Head
+          self.output_head = nn.Linear(self.hparams.d_model, self.hparams.vocab_size)
+
+      def forward(self, src: torch.Tensor, src_mask: torch.Tensor = None) -> torch.Tensor:
+          # src shape: (batch_size, seq_len)
+          src = self.embedding(src) * math.sqrt(self.hparams.d_model)
+          src = self.pos_encoder(src)
+          output = self.transformer_encoder(src, src_mask)
+          return self.output_head(output)
+
+      def training_step(self, batch, batch_idx):
+          x, y = batch
+          logits = self(x)
+          loss = nn.functional.cross_entropy(logits.view(-1, self.hparams.vocab_size), y.view(-1))
+          self.log('train_loss', loss)
+          return loss
+
+      def configure_optimizers(self):
+          return torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the full model instantiation and a forward pass
+      VOCAB_SIZE = 1000
+      BATCH_SIZE = 4
+      SEQ_LEN = 50
+      
+      # 1. Instantiate the full model
+      model = {{ class_name }}(vocab_size=VOCAB_SIZE)
+      
+      # 2. Create a dummy input batch
+      dummy_input = torch.randint(0, VOCAB_SIZE, (BATCH_SIZE, SEQ_LEN))
+      
+      # 3. Perform a forward pass
+      output = model(dummy_input)
+      
+      # 4. Validate the output shape
+      assert output.shape == (BATCH_SIZE, SEQ_LEN, VOCAB_SIZE), "Final output shape is incorrect."
+      
+      print("Full Transformer LightningModule validation passed.")
