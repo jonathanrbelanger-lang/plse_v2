@@ -1,0 +1,118 @@
+plse_version: "2.0"
+pattern_id: "python_anti_pattern_unnecessary_object_creation_in_loop"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Shows the significant performance cost of creating a new object on every
+    loop iteration versus creating it once outside the loop. This paired pattern
+    uses the classic example of compiling a regular expression with `re.compile()`
+    to demonstrate the benefits of hoisting loop-invariant code.
+  tags: [python, core-language, anti-pattern, performance, optimization, loop, best-practice, regex]
+  pedagogy:
+    concept: "Loop-Invariant Code Motion"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following script is inefficient because it repeatedly compiles a regular expression inside a loop. Explain the performance penalty and refactor the code to compile the regex only once.{% else %}Write an optimized Python script that efficiently finds all strings matching a regex pattern in a large list by compiling the pattern once before the loop begins.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  loop_iterations:
+    type: "int"
+    description: "The number of items in the list to process."
+    default: 500_000
+  regex_pattern_var:
+    type: "choice"
+    description: "The variable name for the compiled regex object."
+    default: "email_regex"
+    constraints:
+      options: ["email_regex", "pattern_obj", "compiled_pattern"]
+  data_list_var:
+    type: "choice"
+    description: "The variable name for the list of strings."
+    default: "data"
+    constraints:
+      options: ["data", "log_lines", "user_inputs"]
+
+requires:
+  - "re"
+  - "time"
+
+template: |
+  import re
+  import time
+
+  # --- 1. Setup: Create a large list of strings to search ---
+  {{ data_list_var }} = [
+      "user.name@example.com",
+      "invalid-email",
+      "another.user@domain.org",
+      "not an email",
+  ] * ({{ loop_iterations }} // 4)
+
+  print(f"Processing {len({{ data_list_var }})} strings...")
+  
+  match_count = 0
+  
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Compiling the regex on every iteration ---
+  start_time = time.perf_counter()
+  
+  for text in {{ data_list_var }}:
+      # This is highly inefficient. `re.compile()` is an expensive operation.
+      # Doing it inside the loop means the work is repeated thousands of times.
+      {{ regex_pattern_var }} = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+      if {{ regex_pattern_var }}.match(text):
+          match_count += 1
+          
+  end_time = time.perf_counter()
+  print(f"Inefficient method took: {end_time - start_time:.4f} seconds.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Compiling the regex once, outside the loop ---
+  start_time = time.perf_counter()
+  
+  # The regex is compiled once into a pattern object.
+  # This is a classic example of loop-invariant code motion.
+  {{ regex_pattern_var }} = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+  
+  for text in {{ data_list_var }}:
+      # The pre-compiled pattern object is now reused efficiently on each iteration.
+      if {{ regex_pattern_var }}.match(text):
+          match_count += 1
+          
+  end_time = time.perf_counter()
+  print(f"Optimized method took: {end_time - start_time:.4f} seconds.")
+  {% endif %}
+
+  print(f"Found {match_count} valid emails.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that both methods produce the same logical result
+      # (the same number of matches), proving the optimization is a safe
+      # and correct refactoring.
+      
+      test_data = ["test@email.com", "not-an-email"] * 10
+      test_match_count = 0
+      
+      {% if is_anti_pattern %}
+      for text in test_data:
+          pattern = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+          if pattern.match(text):
+              test_match_count += 1
+      {% else %}
+      pattern = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+      for text in test_data:
+          if pattern.match(text):
+              test_match_count += 1
+      {% endif %}
+      
+      assert test_match_count == 10, f"Expected 10 matches, but found {test_match_count}"
+      
+      print("Regex loop optimization pattern validation passed.")
