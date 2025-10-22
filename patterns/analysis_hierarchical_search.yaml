@@ -1,0 +1,96 @@
+plse_version: "2.0"
+pattern_id: "python.analysis.hierarchical_search"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from DefTrinHTLCompr.ipynb)"
+  description: |
+    Demonstrates a hierarchical, two-stage optimization strategy for model selection
+    and hyperparameter tuning. An "outer loop" performs a fast, low-fidelity search
+    across multiple candidate models to find the best architecture. An "inner loop"
+    then performs a deep, high-fidelity search on only the champion model.
+  tags: [python, automl, optimization, model-selection, best-practice, pso]
+  pedagogy:
+    concept: "Hierarchical Search for AutoML"
+    difficulty: "advanced"
+
+instruction: "Implement a two-stage hierarchical search in Python. The first stage should quickly evaluate two different models ('{{ model_a_name }}' and '{{ model_b_name }}') to select a champion. The second stage should run a more intensive search to fine-tune the champion model's parameters."
+
+parameters:
+  model_a_name:
+    type: "choice"
+    description: "Name for the first candidate model."
+    default: "SimpleModel"
+    constraints:
+      options: ["SimpleModel", "LinearModel"]
+  model_b_name:
+    type: "choice"
+    description: "Name for the second candidate model."
+    default: "ComplexModel"
+    constraints:
+      options: ["ComplexModel", "NonlinearModel"]
+
+requires:
+  - "numpy as np"
+  - "pandas as pd"
+
+template: |
+  # --- Define Dummy Models and a Mock Optimizer ---
+  # In a real scenario, these would be complex ML models and a real optimizer.
+  def mock_optimizer(model_name: str, params: dict, iterations: int) -> float:
+      """Simulates running an optimizer and returns a final score."""
+      print(f"  - Running {model_name} for {iterations} iterations...")
+      # Simulate that the complex model is better but has a penalty for high params
+      base_score = 0.1 if model_name == '{{ model_a_name }}' else 0.05
+      param_penalty = np.mean(list(params.values())) * 0.01
+      return base_score + param_penalty + np.random.rand() * 0.01
+
+  # --- The Hierarchical Search Logic ---
+  def hierarchical_search():
+      """
+      Performs a two-stage search for model selection and parameter tuning.
+      """
+      # --- 1. Outer Loop: Model Selection (Low-Fidelity) ---
+      print("--- Starting Outer Loop: Model Selection ---")
+      outer_loop_results = []
+      models_to_test = {
+          "{{ model_a_name }}": {"param1": 1.0},
+          "{{ model_b_name }}": {"param1": 5.0, "param2": 0.5}
+      }
+      
+      for name, params in models_to_test.items():
+          # Run a fast, low-iteration search
+          score = mock_optimizer(name, params, iterations=10)
+          # A model selection criterion like BIC could be used here
+          bic_score = len(params) * np.log(100) - 2 * np.log(1/score)
+          outer_loop_results.append({"model_name": name, "score": score, "bic": bic_score})
+
+      results_df = pd.DataFrame(outer_loop_results).sort_values(by="bic")
+      champion_model_name = results_df.iloc[0]['model_name']
+      print(f"--- Outer Loop Complete. Champion model: '{champion_model_name}' ---")
+
+      # --- 2. Inner Loop: Parameter Tuning (High-Fidelity) ---
+      print(f"\\n--- Starting Inner Loop: Fine-tuning '{champion_model_name}' ---")
+      champion_params = models_to_test[champion_model_name]
+      
+      # Run a long, high-iteration search on only the best model
+      final_score = mock_optimizer(champion_model_name, champion_params, iterations=100)
+      
+      print(f"--- Inner Loop Complete. Final score for champion: {final_score:.4f} ---")
+      return champion_model_name, final_score
+
+  # --- Main Execution ---
+  if __name__ == "__main__":
+      champion, score = hierarchical_search()
+      print(f"\\n🏆 Hierarchical search finished. Best model is '{champion}' with a score of {score:.4f}.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test that the function runs and returns the expected types
+      champion_name, final_score = hierarchical_search()
+      
+      assert isinstance(champion_name, str)
+      assert champion_name in ["{{ model_a_name }}", "{{ model_b_name }}"]
+      assert isinstance(final_score, float)
+      print("Hierarchical search validation passed.")
