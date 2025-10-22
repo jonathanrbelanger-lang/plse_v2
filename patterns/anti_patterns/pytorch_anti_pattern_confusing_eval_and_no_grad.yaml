@@ -1,0 +1,148 @@
+plse_version: "2.0"
+pattern_id: "pytorch_anti_pattern_confusing_eval_and_no_grad"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    A dedicated pattern to explicitly clarify the orthogonal roles of `model.eval()`
+    and `torch.no_grad()` during inference. It demonstrates that `model.eval()`
+    is for changing layer behavior (like disabling dropout), while `torch.no_grad()`
+    is for disabling the autograd engine to improve performance. This paired
+    pattern shows the two common failure modes and the correct, combined solution.
+  tags: [pytorch, anti-pattern, correctness, performance, inference, evaluation, autograd, expert]
+  pedagogy:
+    concept: "Correct and Efficient PyTorch Inference"
+    difficulty: "expert"
+
+instruction: "{% if is_anti_pattern %}The following script for PyTorch model evaluation is flawed. It either produces incorrect, non-deterministic results or is computationally inefficient. Explain the distinct roles of `model.eval()` and `torch.no_grad()`, identify the specific mistake, and refactor the code to be both correct and efficient.{% else %}Write a robust PyTorch script for model evaluation that is both deterministic and efficient. It should correctly use `model.eval()` to set layer modes and `torch.no_grad()` to disable gradient computation.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate one of the flawed versions. If false, generate the corrected solution."
+    default: true
+  mistake_type:
+    type: "choice"
+    description: "The specific mistake to generate when is_anti_pattern is true."
+    default: "forgets_eval"
+    constraints:
+      options: ["forgets_eval", "forgets_no_grad"]
+  class_name:
+    type: "choice"
+    description: "The name of the model class."
+    default: "InferenceModel"
+    constraints:
+      options: ["InferenceModel", "EvaluationNet", "MyModel"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+
+template: |
+  import torch
+  import torch.nn as nn
+
+  # --- 1. Setup: A model with mode-dependent layers (Dropout, BatchNorm) ---
+  class {{ class_name }}(nn.Module):
+      def __init__(self):
+          super().__init__()
+          self.layer1 = nn.Linear(20, 50)
+          self.bn = nn.BatchNorm1d(50)
+          self.dropout = nn.Dropout(p=0.5)
+          self.layer2 = nn.Linear(50, 10)
+
+      def forward(self, x):
+          x = torch.relu(self.layer1(x))
+          x = self.bn(x)
+          x = self.dropout(x)
+          return self.layer2(x)
+
+  model = {{ class_name }}()
+  input_tensor = torch.randn(4, 20) # Batch of 4
+
+  print("--- Running Inference ---")
+
+  {% if is_anti_pattern %}
+  {% if mistake_type == "forgets_eval" %}
+  # --- ANTI-PATTERN 1: Forgetting `model.eval()` (Correctness Bug) ---
+  # `torch.no_grad()` is used, so it's efficient.
+  # BUT, `model.eval()` is missing. Dropout and BatchNorm are still in training mode.
+  # This leads to random, non-deterministic outputs on every run.
+  print("Mistake: Using `torch.no_grad()` but forgetting `model.eval()`.")
+  
+  with torch.no_grad():
+      output1 = model(input_tensor)
+      output2 = model(input_tensor)
+      
+  are_equal = torch.equal(output1, output2)
+  print(f"Outputs are deterministic: {are_equal}")
+  print("ANALYSIS: The outputs are different on each run because the Dropout layer is still active.")
+
+  {% elif mistake_type == "forgets_no_grad" %}
+  # --- ANTI-PATTERN 2: Forgetting `torch.no_grad()` (Performance Bug) ---
+  # `model.eval()` is called, so the output is correct and deterministic.
+  # BUT, `torch.no_grad()` is missing. PyTorch is wastefully building a
+  # computation graph, consuming unnecessary memory and time.
+  print("Mistake: Using `model.eval()` but forgetting `torch.no_grad()`.")
+  
+  model.eval()
+  output = model(input_tensor)
+  
+  print(f"Output requires gradient: {output.requires_grad}")
+  print("ANALYSIS: The output is correct, but `requires_grad` is True, indicating wasted computation.")
+  {% endif %}
+  {% else %}
+  # --- CORRECT PATTERN: Using both `model.eval()` and `torch.no_grad()` ---
+  print("Correct Pattern: Using both `model.eval()` and `torch.no_grad()`.")
+  
+  # 1. Set the model to evaluation mode. This changes the behavior of layers
+  #    like Dropout and BatchNorm to be deterministic.
+  model.eval()
+  
+  # 2. Use the `no_grad` context manager. This disables the autograd engine,
+  #    preventing gradient calculation and saving memory and compute.
+  with torch.no_grad():
+      output1 = model(input_tensor)
+      output2 = model(input_tensor)
+
+  are_equal = torch.equal(output1, output2)
+  print(f"Outputs are deterministic: {are_equal}")
+  print(f"Output requires gradient: {output1.requires_grad}")
+  print("ANALYSIS: The process is both correct (deterministic) and efficient (no grad tracking).")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates the specific properties of each case.
+      test_model = {{ class_name }}()
+      test_input = torch.randn(4, 20)
+      
+      {% if is_anti_pattern %}
+      {% if mistake_type == "forgets_eval" %}
+      # Test for non-determinism
+      with torch.no_grad():
+          res1 = test_model(test_input)
+          res2 = test_model(test_input)
+      assert not torch.equal(res1, res2), "Forgetting model.eval() should lead to non-deterministic output due to Dropout."
+      print("Validation passed: Correctly identified non-deterministic behavior.")
+      
+      {% elif mistake_type == "forgets_no_grad" %}
+      # Test for inefficiency (gradient tracking)
+      test_model.eval()
+      res = test_model(test_input)
+      assert res.requires_grad, "Forgetting torch.no_grad() should result in an output tensor that requires grad."
+      print("Validation passed: Correctly identified unnecessary gradient tracking.")
+      {% endif %}
+      {% else %}
+      # Test for both correctness (determinism) and efficiency (no grad)
+      test_model.eval()
+      with torch.no_grad():
+          res1 = test_model(test_input)
+          res2 = test_model(test_input)
+      
+      assert torch.equal(res1, res2), "Correct pattern must be deterministic."
+      assert not res1.requires_grad, "Correct pattern must not track gradients."
+      print("Validation passed: Confirmed deterministic and efficient behavior.")
+      {% endif %}
