@@ -1,45 +1,45 @@
 # Python Latent Space Explorer (PLSE) v2.0
 
-PLSE v2.0 is a completely redesigned synthetic code generation engine for creating high-quality, instruction-tuned datasets for Large Language Model (LLM) training.
+PLSE v2.0 is a modern synthetic code generation engine designed to create a high-quality, instruction-tuned dataset for training code-intelligent Large Language Models (LLMs).
 
-This project is the result of a critical analysis of a prior script, rebuilt from the ground up to address foundational flaws and establish a robust, scalable, and extensible architecture. It moves beyond a small set of static examples to a powerful combinatorial system capable of generating thousands of unique and valid code snippets.
+This project moves beyond scraping public code repositories. Instead, it treats the training dataset as a first-class product, engineered from the ground up to be **pedagogical, architecturally sound, and diverse**. The goal is to train LLMs that don't just write code, but understand how to write *good* code.
 
-## Key Features
+## Core Architecture
 
-This version represents a fundamental architectural overhaul, focusing on quality, scalability, and developer experience.
+The engine is built on a flexible, combinatorial, and modular architecture.
 
-*   **Combinatorial Generation**: Replaces a rigid template system with a flexible combinatorial engine. Patterns are defined with `binding_pools`, allowing for the on-the-fly generation of thousands of unique code variations from a single template.
-*   **Modular, File-Based Patterns**: All pattern definitions are externalized into human-readable `.yaml` files located in the `patterns/` directory. The system is no longer monolithic, making it easy to add, modify, or remove patterns without touching the core Python code.
-*   **Multi-Stage Validation Pipeline**: A rigorous, fail-fast validation pipeline ensures the quality of every generated sample. It includes:
-    1.  **Syntax Validation**: Checks for basic syntactic correctness (`ast.parse`).
-    2.  **Style & Linting**: Enforces PEP 8 and catches simple errors (`flake8`).
-    3.  **Deep Code Analysis (Optional)**: Scans for "code smells" and deeper issues (`pylint`).
-    4.  **Safe Execution**: Executes the code in an isolated process with a timeout to prevent infinite loops from crashing the generator.
-*   **Robust Instruction Labeling**: The fragile, keyword-based pattern identification system has been completely removed. The new engine uses the exact bindings from the generation step to create a specific, accurate, and descriptive instruction for each code snippet, guaranteeing a perfect one-to-one mapping.
-*   **Critical Bug Fixes**: Corrects major architectural flaws from the original script, including implementing the unused `requires` field to handle imports and providing robust exception handling.
+*   **Combinatorial Generation**: A powerful Jinja2-based rendering engine creates thousands of unique code snippets by combining variations from a single, well-structured pattern.
+*   **Modular YAML Patterns**: All patterns are defined as human-readable `.yaml` files in the `patterns/` directory. This makes the library easy to extend and maintain.
+*   **Multi-Stage Validation**: A rigorous pipeline ensures every generated sample is syntactically correct, stylistically compliant (PEP 8), and algorithmically sound via self-contained unit tests.
+*   **Robust Instruction Labeling**: A deterministic process creates a specific, accurate, and descriptive instruction for each code snippet, guaranteeing a perfect one-to-one mapping for instruction fine-tuning.
 
-## Project Structure
+## The Pattern Library: A Curriculum for Code Intelligence
 
-The project is organized into a clean, modern Python package structure.
+The heart of PLSE is its pattern library. Each pattern is a self-contained, runnable, and testable lesson designed to teach a specific concept. The library is structured as a comprehensive curriculum covering the breadth of modern Python development.
 
-plse_v2/
-├── patterns/ # Directory for all user-defined YAML pattern files
-│ └── algorithmic_sort.yaml
-├── src/
-│ └── plse/ # The main installable Python package
-│ ├── init.py
-│ ├── patterns.py # Core dataclasses (CombinatorialPattern, etc.)
-│ ├── registry.py # The dynamic PatternRegistry that loads YAML files
-│ ├── generator.py # The CombinatorialCodeGenerator engine
-│ └── validation.py # The multi-stage validation pipeline
-├── main.py # The main runnable script to generate a dataset
-└── pyproject.toml # Project metadata and dependencies
+### Current Pattern Categories:
 
-code
-Code
-download
-content_copy
-expand_less
+*   **Core Python & Standard Library:**
+    *   Fundamental data types (strings, lists, tuples)
+    *   Idiomatic control flow (loops, comprehensions)
+    *   Robust programming (functions, classes, error handling)
+    *   Standard library power tools (`collections`, `itertools`, `argparse`, `logging`)
+
+*   **Scientific Computing & Data Engineering:**
+    *   High-performance NumPy and SciPy (Hamiltonian simulation, parallel PSO)
+    *   Advanced data processing (NLP vocabulary building, memory-mapped datasets)
+    *   Physics-informed feature engineering
+
+*   **Machine Learning & MLOps:**
+    *   **PyTorch & PyTorch Lightning:** Best practices for building models (`nn.Module`), data pipelines (`LightningDataModule`), and full training workflows (`LightningModule`).
+    *   **Advanced Training:** Techniques like custom loss functions, learning rate schedulers, and gradient clipping.
+    *   **Evaluation & Reporting:** Generating classification reports, confusion matrices, and performing statistical hypothesis tests.
+    *   **Deployment:** Serving models as a REST API with FastAPI.
+    *   **Project Setup:** Reproducible environment setup and dependency management.
+
+*   **Meta-Patterns:**
+    *   A unique category of patterns that teach the LLM the schema of the PLSE library itself, enabling it to assist in the creation of new patterns.
+
 ## Getting Started
 
 ### Prerequisites
@@ -48,74 +48,34 @@ expand_less
 
 ### Installation
 
-1.  Clone this repository to your local machine.
+1.  Clone this repository.
 2.  Navigate to the root directory (`plse_v2/`).
-3.  Install the project and its dependencies using `pip`. This command reads the `pyproject.toml` file and handles everything for you.
-
+3.  Create and activate a virtual environment (recommended):
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+4.  Install the project and all its dependencies from `pyproject.toml`:
     ```bash
     pip install .
     ```
 
 ## Usage
 
-The primary entry point for generating a dataset is the `main.py` script.
+The primary entry point is the `main.py` script.
 
-1.  **Configure the run**: Open `main.py` and adjust the configuration variables at the top of the `main()` function:
-    *   `PATTERNS_DIR`: The directory where your patterns are located (default: `"patterns"`).
-    *   `OUTPUT_FILE`: The name of the dataset file to be created (default: `"training_dataset.jsonl"`).
-    *   `NUM_EXAMPLES_TO_GENERATE`: The target number of valid code samples for your dataset.
-    *   `USE_PYLINT_VALIDATOR`: Set to `True` for the highest quality output, but be aware it will significantly slow down generation speed. Defaults to `False`.
-
+1.  **Configure the run**: Open `main.py` and adjust the configuration variables inside the `main()` function.
 2.  **Run the generator**: Execute the script from your terminal.
-
     ```bash
-    python main.py
+    python3 main.py
     ```
+The script will generate a `training_dataset.jsonl` file in your project root.
 
-The script will initialize the system, load all patterns, and begin the generate-validate-format loop. Progress will be printed to the console, and the final dataset will be saved to the specified output file in JSON Lines format.
+## Contributing
 
-## How to Extend PLSE (Adding New Patterns)
+This project thrives on community contributions to the pattern library. If you have an idea for a pattern that teaches a valuable Python or ML concept, we encourage you to contribute.
 
-The new architecture makes adding new patterns incredibly simple.
-
-1.  **Create a New YAML File**: In the `patterns/` directory, create a new file (e.g., `my_new_pattern.yaml`).
-
-2.  **Define Your Pattern**: Follow the structure of the `CombinatorialPattern` dataclass. A minimal template is provided below:
-
-    ```yaml
-    # patterns/my_new_pattern.yaml
-
-    name: "unique_pattern_name"
-    category: "OOP" # Must be a valid category from PatternCategory Enum
-    complexity: 2
-    requires:
-      - "math"     # List any libraries that need to be imported
-
-    template: |
-      # Your multi-line Python code template goes here.
-      # Use {placeholders} for parts you want to vary.
-      import math
-
-      def {func_name}(radius):
-          """{description}"""
-          return {factor} * math.pi * radius**2
-
-    binding_pools:
-      # Define the lists of possible values for each placeholder.
-      func_name:
-        - "calculate_area"
-        - "compute_circle_area"
-
-      description:
-        - "Calculates the area of a circle."
-        - "Computes the area of a circle given its radius."
-
-      factor:
-        - "1.0" # A valid circle area
-        - "2.0" # An invalid one (for testing validation)
-    ```
-
-3.  **Run the Generator**: That's it! The next time you run `python main.py`, the `PatternRegistry` will automatically discover, load, and start using your new pattern in the generation process.
+Please see our `CONTRIBUTING.md` file for a detailed guide on how to author and submit a new pattern. The core philosophy is that **every pattern is a lesson**, and it must be self-contained, runnable, and include its own validation tests.
 
 ## License
 
