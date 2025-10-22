@@ -1,0 +1,104 @@
+plse_version: "2.0"
+pattern_id: "orchestration_devops_docker_compose"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a `docker-compose.yml` file for a multi-service Python web application.
+    This pattern teaches the LLM how to define and orchestrate multiple interconnected
+    services (a FastAPI web app, a Redis cache, and a PostgreSQL database). It covers
+    key concepts like service dependencies (`depends_on`), networking, environment
+    variables, and persistent data volumes.
+  tags: [orchestration, devops, docker, docker-compose, microservices, mlops, best-practice]
+  pedagogy:
+    concept: "Multi-Service Application Orchestration with Docker Compose"
+    difficulty: "expert"
+
+instruction: "Write a complete `docker-compose.yml` file to define a three-service application. The services should be: 1) a web application named `{{ web_service_name }}` built from the local Dockerfile, 2) a `redis` service, and 3) a `postgres` database service. The web application must depend on the database, and the database must use a named volume to persist its data."
+
+parameters:
+  web_service_name:
+    type: "string"
+    description: "The name for the main web application service."
+    default: "web_app"
+  postgres_db_name:
+    type: "string"
+    description: "The name of the PostgreSQL database."
+    default: "mydatabase"
+  postgres_user:
+    type: "string"
+    description: "The username for the PostgreSQL database."
+    default: "user"
+
+requires: [] # The generated artifact is YAML, not Python
+
+components:
+  model_definition: |
+    # This is a docker-compose.yml file. It defines and configures a multi-container application.
+    # It's the standard way to run complex applications in a local development environment.
+
+    version: '3.8'
+
+    services:
+      # 1. The main Python web application service
+      {{ web_service_name }}:
+        build: .  # Tells Docker Compose to build the image from the Dockerfile in the current directory
+        ports:
+          - "8000:8000" # Map port 8000 on the host to port 8000 in the container
+        environment:
+          # Use environment variables to pass configuration to the application.
+          # This is a best practice for separating config from code.
+          - DATABASE_URL=postgresql://{{ postgres_user }}:${POSTGRES_PASSWORD}@db:5432/{{ postgres_db_name }}
+          - REDIS_URL=redis://redis:6379
+        depends_on:
+          - db # Ensures the 'db' service is started before this service
+
+      # 2. The PostgreSQL database service
+      db:
+        image: postgres:15-alpine # Use an official, lightweight image from Docker Hub
+        volumes:
+          - postgres_data:/var/lib/postgresql/data/ # Mount a named volume to persist data
+        environment:
+          - POSTGRES_DB={{ postgres_db_name }}
+          - POSTGRES_USER={{ postgres_user }}
+          - POSTGRES_PASSWORD=${POSTGRES_PASSWORD} # Use a variable from a .env file for secrets
+
+      # 3. The Redis caching service
+      redis:
+        image: redis:7-alpine
+
+    # Define the named volume for persistent database storage
+    volumes:
+      postgres_data:
+
+validation:
+  linter_checks: false # Not applicable to YAML files
+  unit_test_snippets:
+    - |
+      # This validation checks the generated YAML for syntactic correctness and
+      # the presence of key architectural components of a docker-compose file.
+      import yaml
+
+      try:
+          # Attempt to parse the generated content as YAML
+          compose_data = yaml.safe_load('''{{ __raw_code__ }}''')
+          
+          # Check for key structural elements
+          assert 'version' in compose_data, "Compose file must have a 'version' key."
+          assert 'services' in compose_data, "Compose file must have a 'services' section."
+          
+          services = compose_data['services']
+          assert '{{ web_service_name }}' in services, "Web service is missing."
+          assert 'db' in services, "Database service 'db' is missing."
+          assert 'redis' in services, "Redis service is missing."
+          
+          # Check for key architectural patterns
+          assert 'depends_on' in services['{{ web_service_name }}'], "Web service should have 'depends_on'."
+          assert 'db' in services['{{ web_service_name }}']['depends_on'], "Web service should depend on 'db'."
+          assert 'volumes' in services['db'], "Database service should have a volume."
+          assert 'volumes' in compose_data and 'postgres_data' in compose_data['volumes'], "A named volume 'postgres_data' should be defined."
+          
+          print("Orchestration pattern validation passed: Docker Compose file is structurally sound.")
+          
+      except yaml.YAMLError as e:
+          raise AssertionError(f"Generated content is not valid YAML: {e}") from e
