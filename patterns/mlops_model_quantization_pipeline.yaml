@@ -1,0 +1,115 @@
+plse_version: "2.0"
+pattern_id: "mlops.pipeline.model_quantization"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from PyachamamaQuantiz.ipynb)"
+  description: |
+    Demonstrates a robust MLOps pipeline for model optimization. This script
+    orchestrates a sequence of command-line tools to first convert a Hugging Face
+    model to GGUF format, and then quantize it to a smaller, more efficient
+    data type (e.g., 4-bit). It includes best practices like file existence checks.
+  tags: [mlops, pipeline, quantization, llm, gguf, best-practice]
+  pedagogy:
+    concept: "Model Conversion and Quantization Pipelines"
+    difficulty: "advanced"
+
+instruction: "Write a Python script that defines a pipeline to optimize a language model. The script should execute two main steps using `os.system`: first, run a conversion script to create an FP16 GGUF file, and second, run a quantization tool to create a `{{ quant_method }}` GGUF file from the FP16 version."
+
+parameters:
+  model_path:
+    type: "choice"
+    description: "The path to the source Hugging Face model."
+    default: "./my-hf-model"
+    constraints:
+      options: ["./my-hf-model", "./models/llama-7b-hf"]
+  quant_method:
+    type: "choice"
+    description: "The target quantization method for the final model."
+    default: "Q4_K_M"
+    constraints:
+      options: ["Q4_K_M", "Q5_K_M", "Q8_0"]
+
+requires:
+  - "os"
+
+template: |
+  import os
+
+  # --- Configuration ---
+  SOURCE_MODEL_PATH = "{{ model_path }}"
+  MODEL_NAME = os.path.basename(SOURCE_MODEL_PATH)
+  
+  # Define paths for intermediate and final model files
+  FP16_GGUF_PATH = f"{MODEL_NAME}-fp16.gguf"
+  QUANTIZED_GGUF_PATH = f"{MODEL_NAME}-{{ quant_method }}.gguf"
+  
+  # Paths to the external tools (assumed to be in the current directory)
+  CONVERT_SCRIPT = "./convert_hf_to_gguf.py"
+  QUANTIZE_TOOL = "./quantize"
+
+  def run_pipeline():
+      """Orchestrates the model conversion and quantization pipeline."""
+      
+      # --- Step 1: Convert Hugging Face model to FP16 GGUF ---
+      print(f"--- Step 1: Converting {SOURCE_MODEL_PATH} to FP16 GGUF ---")
+      convert_command = (
+          f"python {CONVERT_SCRIPT} {SOURCE_MODEL_PATH} "
+          f"--outfile {FP16_GGUF_PATH} --outtype f16"
+      )
+      print(f"Executing: {convert_command}")
+      exit_code = os.system(convert_command)
+      if exit_code != 0:
+          print(f"❌ ERROR: Model conversion failed with exit code {exit_code}.")
+          return
+
+      # --- Step 2: Quantize the FP16 GGUF model ---
+      print(f"\\n--- Step 2: Quantizing {FP16_GGUF_PATH} to {{ quant_method }} ---")
+      
+      # Best Practice: Verify the input file from the previous step exists
+      if not os.path.exists(FP16_GGUF_PATH):
+          print(f"❌ ERROR: Intermediate file '{FP16_GGUF_PATH}' not found. Conversion may have failed.")
+          return
+          
+      quantize_command = (
+          f"{QUANTIZE_TOOL} {FP16_GGUF_PATH} {QUANTIZED_GGUF_PATH} {{ quant_method }}"
+      )
+      print(f"Executing: {quantize_command}")
+      exit_code = os.system(quantize_command)
+      if exit_code != 0:
+          print(f"❌ ERROR: Quantization failed with exit code {exit_code}.")
+          return
+
+      # --- Step 3: Final Verification ---
+      if os.path.exists(QUANTIZED_GGUF_PATH):
+          print(f"\\n🎉 SUCCESS: Pipeline complete. Final model at: {QUANTIZED_GGUF_PATH}")
+      else:
+          print(f"❌ ERROR: Final quantized file was not created.")
+
+  if __name__ == "__main__":
+      # Create dummy files and directories to simulate the environment for this example
+      os.makedirs("{{ model_path }}", exist_ok=True)
+      with open(CONVERT_SCRIPT, "w") as f: f.write("#!/bin/bash\\necho 'Simulating conversion...'\\ntouch $2")
+      os.chmod(CONVERT_SCRIPT, 0o755)
+      with open(QUANTIZE_TOOL, "w") as f: f.write("#!/bin/bash\\necho 'Simulating quantization...'\\ntouch $2")
+      os.chmod(QUANTIZE_TOOL, 0o755)
+      
+      run_pipeline()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test verifies the orchestration logic by checking for side effects.
+      run_pipeline()
+      
+      # Check that the final output file was created by the dummy scripts
+      assert os.path.exists(QUANTIZED_GGUF_PATH), "Final quantized file was not created."
+      
+      print("Model quantization pipeline validation passed.")
+      
+      # Clean up the dummy files
+      os.remove(FP16_GGUF_PATH)
+      os.remove(QUANTIZED_GGUF_PATH)
+      os.remove(CONVERT_SCRIPT)
+      os.remove(QUANTIZE_TOOL)
+      os.rmdir("{{ model_path }}")
