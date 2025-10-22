@@ -1,0 +1,104 @@
+plse_version: "2.0"
+pattern_id: "pandas.anti_pattern.chained_assignment"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the `SettingWithCopyWarning` anti-pattern in pandas. This paired
+    pattern shows how ambiguous chained indexing (e.g., `df[...][...] = ...`) can
+    fail silently because the assignment may be happening on a copy. It contrasts
+    this with the correct, robust method of using the `.loc` indexer for assignments.
+  tags: [pandas, data-science, anti-pattern, correctness, warning, best-practice]
+  pedagogy:
+    concept: "Avoiding Chained Assignment in Pandas"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following pandas code attempts to set a value on a slice of a DataFrame but may fail silently due to chained assignment. Identify and fix this anti-pattern.{% else %}Write a robust pandas script that correctly sets a value on a filtered slice of a DataFrame using the `.loc` indexer to avoid a `SettingWithCopyWarning`.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  df_var:
+    type: "choice"
+    description: "The variable name for the DataFrame."
+    default: "df"
+    constraints:
+      options: ["df", "data", "inventory"]
+
+requires:
+  - "pandas as pd"
+  - "numpy as np"
+
+template: |
+  import pandas as pd
+  import numpy as np
+
+  # --- 1. Create a sample DataFrame ---
+  {{ df_var }} = pd.DataFrame({
+      'category': ['Fruit', 'Fruit', 'Vegetable', 'Vegetable', 'Fruit'],
+      'item': ['Apple', 'Orange', 'Carrot', 'Broccoli', 'Banana'],
+      'quantity': [10, 15, 20, 5, 12]
+  })
+  print("--- Original DataFrame ---")
+  print({{ df_var }})
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Chained Assignment ---
+  print("\\n--- Attempting to set quantity to 0 for all 'Fruit' (INCORRECT) ---")
+  
+  # This is a chained indexing operation: df['category'] == 'Fruit' creates a boolean Series.
+  # df[...] performs the row selection. This can return a VIEW or a COPY.
+  # The second indexing operation, ['quantity'], is then performed on that result.
+  # If it's a copy, the assignment will not modify the original DataFrame.
+  # This will often raise a `SettingWithCopyWarning`.
+  try:
+      # We use a context manager to temporarily suppress the warning for demonstration
+      with pd.option_context('mode.chained_assignment', None):
+          {{ df_var }}[{{ df_var }}['category'] == 'Fruit']['quantity'] = 0
+  except Exception as e:
+      print(f"An error occurred: {e}")
+
+  print("\\n--- DataFrame after flawed assignment ---")
+  print({{ df_var }})
+  print("\\nBUG: The 'quantity' for 'Fruit' was not changed because the assignment happened on a temporary copy.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Using .loc for assignment ---
+  print("\\n--- Setting quantity to 0 for all 'Fruit' using .loc (CORRECT) ---")
+  
+  # .loc is the canonical tool for label-based assignment.
+  # It takes the row selector and column selector in a single operation.
+  # This guarantees that the assignment is performed on the original DataFrame.
+  row_selector = {{ df_var }}['category'] == 'Fruit'
+  column_selector = 'quantity'
+  {{ df_var }}.loc[row_selector, column_selector] = 0
+
+  print("\\n--- DataFrame after correct assignment ---")
+  print({{ df_var }})
+  print("\\nCORRECT: The 'quantity' for all 'Fruit' items was successfully set to 0.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test checks the final state of the DataFrame, which is the
+      # key behavioral difference between the two patterns.
+      
+      {% if is_anti_pattern %}
+      # For the anti-pattern, we assert that the DataFrame was NOT modified.
+      fruit_quantities = {{ df_var }}[{{ df_var }}['category'] == 'Fruit']['quantity']
+      assert not (fruit_quantities == 0).all(), "The quantities should not have been changed by the flawed assignment."
+      print("Chained assignment anti-pattern validated (assignment failed as expected).")
+      {% else %}
+      # For the correct pattern, we assert that the DataFrame WAS modified.
+      fruit_quantities = {{ df_var }}[{{ df_var }}['category'] == 'Fruit']['quantity']
+      assert (fruit_quantities == 0).all(), "The quantities were not correctly set to 0 using .loc."
+      
+      # Also check that other rows were not affected
+      veg_quantities = {{ df_var }}[{{ df_var }}['category'] == 'Vegetable']['quantity']
+      assert (veg_quantities > 0).all(), "Assignment incorrectly affected non-target rows."
+      print("Correct use of .loc for assignment validated.")
+      {% endif %}
