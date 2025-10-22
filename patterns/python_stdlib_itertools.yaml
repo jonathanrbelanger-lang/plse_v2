@@ -1,0 +1,107 @@
+plse_version: "2.0"
+pattern_id: "python.stdlib.itertools"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates powerful and memory-efficient iteration techniques from Python's
+    `itertools` module. This pattern shows how `itertools.product` can replace
+    nested for-loops for Cartesian products, and how `itertools.combinations`
+    can find unique combinations of elements.
+  tags: [python, core-language, standard-library, itertools, iterators, performance, best-practice]
+  pedagogy:
+    concept: "Efficient Iteration with Itertools"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that demonstrates the use of `itertools.{{ func_to_show }}`. The script should show how this function can solve a common iteration problem more efficiently than a standard loop-based approach."
+
+parameters:
+  func_to_show:
+    type: "choice"
+    description: "The specific itertools function to demonstrate."
+    default: "product"
+    constraints:
+      options: ["product", "combinations"]
+  iterable_a_name:
+    type: "choice"
+    description: "The variable name for the first source iterable."
+    default: "ranks"
+    constraints:
+      options: ["ranks", "list_a", "colors"]
+  iterable_b_name:
+    type: "choice"
+    description: "The variable name for the second source iterable."
+    default: "suits"
+    constraints:
+      options: ["suits", "list_b", "sizes"]
+
+requires:
+  - "itertools"
+
+template: |
+  import itertools
+
+  {% if func_to_show == 'product' %}
+  # --- Demonstrate itertools.product to replace nested loops ---
+  print("--- Using itertools.product for Cartesian product ---")
+  
+  {{ iterable_a_name }} = ['A', 'K', 'Q', 'J']
+  {{ iterable_b_name }} = ['Hearts', 'Diamonds']
+
+  # Traditional method with nested for-loops
+  product_from_loop = []
+  for rank in {{ iterable_a_name }}:
+      for suit in {{ iterable_b_name }}:
+          product_from_loop.append((rank, suit))
+  
+  # Pythonic method with itertools.product
+  # This is more readable and memory-efficient as it creates an iterator.
+  product_iterator = itertools.product({{ iterable_a_name }}, {{ iterable_b_name }})
+  product_from_itertools = list(product_iterator)
+
+  print(f"Result from nested loops: {product_from_loop}")
+  print(f"Result from itertools:    {product_from_itertools}")
+  assert product_from_loop == product_from_itertools
+  print("\\n✅ Results are identical. `itertools.product` is more concise.")
+
+  {% elif func_to_show == 'combinations' %}
+  # --- Demonstrate itertools.combinations for unique pairings ---
+  print("--- Using itertools.combinations to find unique pairs ---")
+  
+  {{ iterable_a_name }} = ['Alice', 'Bob', 'Charlie', 'David']
+  
+  # Traditional method with nested loops and index checks
+  combinations_from_loop = []
+  for i in range(len({{ iterable_a_name }})):
+      for j in range(i + 1, len({{ iterable_a_name }})):
+          combinations_from_loop.append(({{ iterable_a_name }}[i], {{ iterable_a_name }}[j]))
+
+  # Pythonic method with itertools.combinations
+  # This is far more readable and less error-prone.
+  combinations_iterator = itertools.combinations({{ iterable_a_name }}, 2)
+  combinations_from_itertools = list(combinations_iterator)
+
+  print(f"Result from nested loops: {combinations_from_loop}")
+  print(f"Result from itertools:    {combinations_from_itertools}")
+  assert combinations_from_loop == combinations_from_itertools
+  print("\\n✅ Results are identical. `itertools.combinations` is clearer and more robust.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      {% if func_to_show == 'product' %}
+      assert 'product_from_itertools' in locals()
+      assert len(product_from_itertools) == 8
+      assert ('K', 'Diamonds') in product_from_itertools
+      print("itertools.product validation passed.")
+      {% elif func_to_show == 'combinations' %}
+      assert 'combinations_from_itertools' in locals()
+      # The number of combinations of 4 items taken 2 at a time is 6.
+      assert len(combinations_from_itertools) == 6
+      assert ('Alice', 'David') in combinations_from_itertools
+      # Order doesn't matter, so the reverse should not be present.
+      assert ('David', 'Alice') not in combinations_from_itertools
+      print("itertools.combinations validation passed.")
+      {% endif %}
