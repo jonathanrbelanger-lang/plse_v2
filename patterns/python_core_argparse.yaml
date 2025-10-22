@@ -1,0 +1,143 @@
+plse_version: "2.0"
+pattern_id: "python.core.argparse_cli"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates how to build a command-line interface (CLI) for a Python script
+    using the standard `argparse` module. This pattern shows how to define
+    positional arguments, optional arguments with flags, and arguments with
+    specific data types.
+  tags: [python, core-language, standard-library, argparse, cli, best-practice]
+  pedagogy:
+    concept: "Building Command-Line Interfaces"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that uses the `argparse` module to create a command-line tool. The tool should accept a required positional argument `{{ input_file_var }}`, an optional integer argument `--{{ num_lines_var }}`, and an optional boolean flag `--{{ force_var }}`."
+
+parameters:
+  input_file_var:
+    type: "choice"
+    description: "The variable name for the required input file argument."
+    default: "input_file"
+    constraints:
+      options: ["input_file", "source_path", "infile"]
+  num_lines_var:
+    type: "choice"
+    description: "The variable name for the optional number of lines argument."
+    default: "num_lines"
+    constraints:
+      options: ["num_lines", "limit", "head"]
+  force_var:
+    type: "choice"
+    description: "The variable name for the optional boolean force flag."
+    default: "force"
+    constraints:
+      options: ["force", "overwrite", "no_prompt"]
+
+requires:
+  - "argparse"
+
+template: |
+  import argparse
+
+  def process_file(filename: str, max_lines: int, is_forced: bool):
+      """A dummy function that simulates processing a file."""
+      print("--- Script Configuration ---")
+      print(f"  Input file: {filename}")
+      print(f"  Lines to process: {max_lines}")
+      print(f"  Force mode: {is_forced}")
+      print("--------------------------")
+      print("\\nSimulating file processing...")
+      # In a real script, file processing logic would go here.
+      print("Processing complete.")
+
+  def main():
+      """
+      Parses command-line arguments and runs the main processing function.
+      """
+      # 1. Create the parser
+      parser = argparse.ArgumentParser(
+          description="A demonstration script for command-line argument parsing."
+      )
+
+      # 2. Add arguments
+      
+      # A required positional argument
+      parser.add_argument(
+          "{{ input_file_var }}",
+          type=str,
+          help="The path to the input file to be processed."
+      )
+      
+      # An optional argument with a short and long flag, a type, and a default
+      parser.add_argument(
+          "-n", "--{{ num_lines_var }}",
+          type=int,
+          default=10,
+          help="The number of lines to process from the file (default: 10)."
+      )
+      
+      # An optional boolean flag. 'action="store_true"' means if the flag is
+      # present, the value is True. If absent, it's False.
+      parser.add_argument(
+          "-f", "--{{ force_var }}",
+          action="store_true",
+          help="Force the operation without asking for confirmation."
+      )
+
+      # 3. Parse the arguments from the command line
+      args = parser.parse_args()
+
+      # 4. Call the main logic with the parsed arguments
+      process_file(
+          filename=getattr(args, '{{ input_file_var }}'),
+          max_lines=getattr(args, '{{ num_lines_var }}'),
+          is_forced=getattr(args, '{{ force_var }}')
+      )
+
+  if __name__ == "__main__":
+      # To make this runnable for testing, we can simulate command-line arguments
+      # by manually modifying sys.argv. In a real CLI, this block is not needed.
+      import sys
+      
+      print("--- Running with default arguments ---")
+      sys.argv = ['{{ __file__ }}', 'my_data.csv']
+      main()
+      
+      print("\\n" + "="*40 + "\\n")
+      
+      print("--- Running with custom arguments ---")
+      sys.argv = ['{{ __file__ }}', 'another_file.log', '--{{ num_lines_var }}', '100', '-f']
+      main()
+
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the argument parsing logic by mocking sys.argv
+      import sys
+      from unittest.mock import patch
+
+      # We patch the 'process_file' function to "spy" on how it's called
+      with patch('__main__.process_file') as mock_process_file:
+          # 1. Test with only the required argument
+          sys.argv = ['test_script.py', 'input.txt']
+          main()
+          mock_process_file.assert_called_with(
+              filename='input.txt',
+              max_lines=10,  # Should use the default
+              is_forced=False # Should use the default
+          )
+
+          # 2. Test with all arguments
+          sys.argv = ['test_script.py', 'data.log', '--{{ num_lines_var }}', '50', '--{{ force_var }}']
+          main()
+          mock_process_file.assert_called_with(
+              filename='data.log',
+              max_lines=50,
+              is_forced=True
+          )
+      
+      print("argparse validation passed successfully.")
