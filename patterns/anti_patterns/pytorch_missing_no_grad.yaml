@@ -1,0 +1,110 @@
+plse_version: "2.0"
+pattern_id: "pytorch.anti_pattern.missing_no_grad"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the critical performance anti-pattern of forgetting to use the
+    `torch.no_grad()` context manager during inference or validation in PyTorch.
+    This paired pattern shows how omitting it causes PyTorch to unnecessarily
+    track gradients, consuming extra memory and computation, and contrasts it
+    with the correct, efficient implementation.
+  tags: [pytorch, anti-pattern, performance, memory, inference, validation, best-practice]
+  pedagogy:
+    concept: "Disabling Gradient Computation with `torch.no_grad()`"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following PyTorch validation loop is inefficient because it tracks gradients unnecessarily. Explain why this is a performance anti-pattern and refactor it to use `torch.no_grad()` context manager.{% else %}Write an efficient PyTorch validation loop that correctly uses the `torch.no_grad()` context manager to disable gradient computation and reduce memory usage.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  model_var:
+    type: "choice"
+    description: "The variable name for the model."
+    default: "model"
+    constraints:
+      options: ["model", "network"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+
+template: |
+  import torch
+  import torch.nn as nn
+
+  # --- 1. Setup a simple model and dummy data ---
+  {{ model_var }} = nn.Sequential(nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, 10))
+  data_loader = [(torch.randn(64, 100), torch.randint(0, 10, (64,))) for _ in range(10)]
+
+  # --- 2. Set model to evaluation mode (a separate, but related, best practice) ---
+  {{ model_var }}.eval()
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: No `torch.no_grad()` context manager ---
+  print("--- Running validation loop WITHOUT `torch.no_grad()` (INEFFICIENT) ---")
+  
+  # In this loop, PyTorch will build a computation graph for every operation,
+  # tracking the history needed for .backward(). This is completely wasted
+  # effort during validation, consuming significant memory and CPU time.
+  total_correct = 0
+  total_samples = 0
+  for inputs, labels in data_loader:
+      outputs = {{ model_var }}(inputs)
+      # The `grad_fn` attribute shows that gradients are being tracked.
+      has_grad_fn = outputs.grad_fn is not None
+      
+      preds = torch.argmax(outputs, dim=1)
+      total_correct += (preds == labels).sum().item()
+      total_samples += len(labels)
+
+  accuracy = total_correct / total_samples
+  print(f"Validation Accuracy: {accuracy:.4f}")
+  print(f"Were gradients tracked? {has_grad_fn}")
+  print("ANALYSIS: Gradients were tracked unnecessarily, wasting memory and compute.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Using `torch.no_grad()` ---
+  print("--- Running validation loop WITH `torch.no_grad()` (EFFICIENT) ---")
+
+  # The `with torch.no_grad():` block tells PyTorch to disable the autograd
+  # engine for all operations inside it. This is a major optimization.
+  with torch.no_grad():
+      total_correct = 0
+      total_samples = 0
+      for inputs, labels in data_loader:
+          outputs = {{ model_var }}(inputs)
+          # The `grad_fn` will be None, indicating no gradient tracking.
+          has_grad_fn = outputs.grad_fn is not None
+          
+          preds = torch.argmax(outputs, dim=1)
+          total_correct += (preds == labels).sum().item()
+          total_samples += len(labels)
+
+  accuracy = total_correct / total_samples
+  print(f"Validation Accuracy: {accuracy:.4f}")
+  print(f"Were gradients tracked? {has_grad_fn}")
+  print("ANALYSIS: Gradients were not tracked, saving memory and speeding up inference.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test directly checks the key behavioral difference:
+      # whether the output tensor requires gradients or not.
+      
+      assert 'has_grad_fn' in locals(), "`has_grad_fn` variable was not created."
+      
+      {% if is_anti_pattern %}
+      # The anti-pattern should track gradients.
+      assert has_grad_fn is True, "Without `no_grad`, the output tensor should have a `grad_fn`."
+      print("`no_grad` anti-pattern validated (gradient tracking confirmed).")
+      {% else %}
+      # The correct pattern should NOT track gradients.
+      assert has_grad_fn is False, "With `no_grad`, the output tensor should NOT have a `grad_fn`."
+      print("Correct use of `no_grad` validated (gradient tracking disabled).")
+      {% endif %}
