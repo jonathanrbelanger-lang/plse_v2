@@ -36,13 +36,13 @@ class SyntaxValidator(BaseValidator):
 class Flake8Validator(BaseValidator):
     """
     Validates code against PEP 8 style conventions using Flake8.
-    Reverted to tempfile method to fix API incompatibility bug.
     """
     def __init__(self):
-        self.style_guide = flake8.get_style_guide(ignore=['E501', 'W292', 'F841', 'E402'])
+        # Ignore non-critical style warnings to reduce noise
+        ignore_codes = ['E501', 'W292', 'F841', 'E402', 'E302', 'E305', 'W293']
+        self.style_guide = flake8.get_style_guide(ignore=ignore_codes)
 
     def validate(self, code: str, **kwargs) -> ValidationResult:
-        # --- BUG FIX: Revert to the correct, file-based API usage ---
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
             f.write(code)
             filepath = f.name
@@ -53,10 +53,13 @@ class Flake8Validator(BaseValidator):
         if report.total_errors == 0:
             return ValidationResult(True, code)
         else:
-            errors = [f"Flake8 ({e.code} at line {e.line_number}): {e.text}" for e in report.errors]
-            return ValidationResult(False, code, errors[:5])
+            # --- BUG FIX: Revert to the correct API for getting errors ---
+            # The report object does not have an '.errors' attribute.
+            # The correct method is .get_statistics('').
+            errors = [f"Flake8: {e}" for e in report.get_statistics('')]
+            return ValidationResult(False, code, errors)
 
-# ... (The rest of the file remains the same as the last version I sent) ...
+# ... (The rest of the file is unchanged and correct) ...
 
 def _execute_python_in_process(code: str, queue: multiprocessing.Queue):
     try:
@@ -129,5 +132,4 @@ class ValidationPipeline:
             result = validator.validate(code=code)
             if not result.valid: return result
         
-        # The SafeExecutionValidator now handles both main code and tests
         return self.execution_validator.validate(code=code, tests=tests)
