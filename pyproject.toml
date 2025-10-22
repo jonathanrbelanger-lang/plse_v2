@@ -18,13 +18,22 @@ classifiers = [
 ]
 
 dependencies = [
-    "autopep8",      # For code formatting
-    "pyyaml",        # For loading pattern files
-    "pylint",        # For deep code analysis in validation
-    "flake8",        # For style and linting in validation
-    "mypy",          # For static type checking in validation
-    "jinja2", 
-    "pydantic"
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "jinja2>=3.0",
+    "flake8>=6.0",
+    "numpy>=1.21",
+    "scikit-learn>=1.0",
+    "pandas>=2.0",
+    "torch>=2.0",
+    "torchvision",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "Pillow", # Note: The PIL requirement is met by the Pillow package
+    "joblib",
+    "toml",
+    "pytest"
 ]
 
 [project.urls]
