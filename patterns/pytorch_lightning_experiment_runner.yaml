@@ -1,0 +1,155 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.experiment_runner"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates a best-practice MLOps pattern for orchestrating a complete
+    PyTorch Lightning experiment. This pattern defines a reusable function that
+    handles datamodule setup, model initialization, trainer configuration (with
+    loggers and callbacks), and execution of the fit/test cycle.
+  tags: [pytorch, pytorch-lightning, mlops, best-practice, experiment-design]
+  pedagogy:
+    concept: "Orchestrating Reproducible ML Experiments"
+    difficulty: "advanced"
+
+instruction: "Write a reusable Python function named `{{ func_name }}` that runs a complete PyTorch Lightning experiment. The function should accept a model class and a configuration dictionary, set up a Trainer with a logger and callbacks for checkpointing and early stopping, and then run the training and testing phases."
+
+parameters:
+  func_name:
+    type: "choice"
+    description: "The name for the main experiment runner function."
+    default: "run_experiment"
+    constraints:
+      options: ["run_experiment", "execute_trial", "run_training_pipeline"]
+  precision:
+    type: "choice"
+    description: "The training precision to use for the Trainer."
+    default: "16-mixed"
+    constraints:
+      options: ["16-mixed", "bf16-mixed", "32-true"]
+  monitor_metric:
+    type: "choice"
+    description: "The metric to monitor for callbacks."
+    default: "val_loss"
+    constraints:
+      options: ["val_loss", "val_accuracy"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "pytorch_lightning as pl"
+  - "from torch.utils.data import DataLoader, TensorDataset"
+  - "from pytorch_lightning.loggers import TensorBoardLogger"
+  - "from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping"
+  - "os"
+
+template: |
+  # --- Placeholder Model and Data for a self-contained example ---
+  class MyLitModel(pl.LightningModule):
+      def __init__(self, lr=1e-3):
+          super().__init__()
+          self.save_hyperparameters()
+          self.model = nn.Sequential(nn.Linear(32, 10), nn.ReLU(), nn.Linear(10, 2))
+      def forward(self, x): return self.model(x)
+      def training_step(self, batch, batch_idx):
+          x, y = batch
+          loss = nn.functional.cross_entropy(self(x), y)
+          self.log("train_loss", loss)
+          return loss
+      def validation_step(self, batch, batch_idx):
+          x, y = batch
+          loss = nn.functional.cross_entropy(self(x), y)
+          self.log("{{ monitor_metric }}", loss)
+      def configure_optimizers(self):
+          return torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+
+  # --- The Main Experiment Runner Function ---
+  def {{ func_name }}(model_class, config: dict, run_name: str):
+      """
+      Executes a full training and testing pipeline for a given model and config.
+      """
+      print(f"--- Starting run: {run_name} ---")
+      
+      # 1. Setup Data
+      train_data = TensorDataset(torch.randn(100, 32), torch.randint(0, 2, (100,)))
+      val_data = TensorDataset(torch.randn(20, 32), torch.randint(0, 2, (20,)))
+      train_loader = DataLoader(train_data, batch_size=config["batch_size"])
+      val_loader = DataLoader(val_data, batch_size=config["batch_size"])
+
+      # 2. Initialize Model
+      model = model_class(lr=config["learning_rate"])
+
+      # 3. Configure Callbacks & Logger
+      log_dir = config["log_dir"]
+      logger = TensorBoardLogger(log_dir, name=run_name)
+      
+      checkpoint_callback = ModelCheckpoint(
+          dirpath=os.path.join(log_dir, run_name, "checkpoints"),
+          monitor="{{ monitor_metric }}",
+          mode="{{ 'min' if 'loss' in monitor_metric else 'max' }}",
+          save_top_k=1
+      )
+      
+      early_stopping_callback = EarlyStopping(
+          monitor="{{ monitor_metric }}",
+          patience=config["patience"],
+          mode="{{ 'min' if 'loss' in monitor_metric else 'max' }}"
+      )
+
+      # 4. Configure Trainer
+      trainer = pl.Trainer(
+          accelerator="auto",
+          devices=1,
+          max_epochs=config["max_epochs"],
+          logger=logger,
+          callbacks=[checkpoint_callback, early_stopping_callback],
+          precision="{{ precision }}",
+          enable_progress_bar=False,
+          log_every_n_steps=1
+      )
+
+      # 5. Run Training
+      trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+      
+      print(f"--- Run '{run_name}' finished ---")
+      return trainer.callback_metrics
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test verifies the side-effects of the runner function.
+      import shutil
+      
+      # Define a minimal config for a very fast test run
+      test_config = {
+          "learning_rate": 1e-3,
+          "batch_size": 16,
+          "max_epochs": 1,
+          "patience": 1,
+          "log_dir": "./test_logs"
+      }
+      
+      # Run the experiment
+      metrics = {{ func_name }}(
+          model_class=MyLitModel,
+          config=test_config,
+          run_name="smoke_test"
+      )
+      
+      # Verify that logs and checkpoints were created
+      log_path = os.path.join(test_config["log_dir"], "smoke_test")
+      assert os.path.isdir(log_path), "Log directory was not created."
+      
+      checkpoint_dir = os.path.join(log_path, "checkpoints")
+      assert os.path.isdir(checkpoint_dir), "Checkpoint directory was not created."
+      assert len(os.listdir(checkpoint_dir)) > 0, "No checkpoint file was saved."
+      
+      # Verify that metrics were returned
+      assert "{{ monitor_metric }}" in metrics, "Monitored metric not found in final results."
+      
+      print("Experiment runner validation passed.")
+      
+      # Clean up the created log directories
+      shutil.rmtree(test_config["log_dir"])
