@@ -1,33 +1,22 @@
 """
-Defines the core data structures for the PLSE v2.0, based on the
-strategic framework for a pedagogical, YAML-based pattern library.
+Defines the internal dataclasses used by the PLSE application after
+YAML patterns have been parsed and validated.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Any, Sequence
+from typing import Dict, List, Any, Optional
 
-# --- Schema-aligned Dataclasses ---
-
-class PatternCategory(Enum):
-    """Enumeration for the categories of Python patterns."""
-    ALGORITHMIC = "algorithmic"
-    DATA_STRUCTURE = "data_structure"
-    DEEP_LEARNING = "deep_learning" # New category for ML focus
-    DATA_PROCESSING = "data_processing"
-    ML_CONCEPTS = "ml_concepts"
-    # ... add others as needed
+# Import the Pydantic schema for type hinting in our classmethod
+from .schema import RawPatternSchema
 
 @dataclass
 class Pedagogy:
-    """Defines the educational objective of a pattern."""
     concept: str
-    difficulty: str # e.g., "beginner", "intermediate", "advanced"
+    difficulty: str
     related_patterns: List[str] = field(default_factory=list)
 
 @dataclass
 class Metadata:
-    """Container for all descriptive metadata about the pattern."""
     author: str
     description: str
     tags: List[str]
@@ -35,47 +24,72 @@ class Metadata:
 
 @dataclass
 class Parameter:
-    """Defines a variable for dynamic code generation."""
-    type: str # e.g., "int", "float", "string", "bool", "choice"
+    type: str
     description: str
     default: Any
-    constraints: Dict[str, Any] = field(default_factory=dict)
+    constraints: Optional[Dict[str, Any]] = None
 
 @dataclass
 class Components:
     """Architectural blueprint of the code to be generated."""
     imports: str
     model_definition: str
-    data_setup: str = ""
-    training_loop: str = ""
-    evaluation: str = ""
+    data_setup: Optional[str] = None
+    training_loop: Optional[str] = None
+    evaluation: Optional[str] = None
 
 @dataclass
 class Validation:
-    """Defines methods for verifying the correctness of generated code."""
     linter_checks: bool = True
     unit_test_snippets: List[str] = field(default_factory=list)
-    expected_output: Dict[str, Any] = field(default_factory=dict)
+    expected_output: Optional[Dict[str, Any]] = None
 
 @dataclass
 class PLSEPattern:
     """
-    The top-level dataclass for a single, complete pattern definition,
-    loaded from a YAML file. This replaces the simpler CombinatorialPattern.
+    The internal, validated representation of a single PLSE pattern.
+    This is the definitive structure for the application.
     """
     plse_version: str
     pattern_id: str
     metadata: Metadata
     instruction: str
-    parameters: Dict[str, Parameter]
     components: Components
+    parameters: Dict[str, Parameter] = field(default_factory=dict)
     validation: Validation = field(default_factory=Validation)
+    requires: List[str] = field(default_factory=list)
 
-# --- Supporting Dataclasses ---
+    @classmethod
+    def from_schema(cls, schema: RawPatternSchema) -> "PLSEPattern":
+        """
+        Factory method to convert a validated Pydantic schema object
+        into the internal PLSEPattern dataclass.
+        """
+        pedagogy_obj = Pedagogy(**schema.metadata.pedagogy.model_dump())
+        metadata_obj = Metadata(
+            author=schema.metadata.author,
+            description=schema.metadata.description,
+            tags=schema.metadata.tags,
+            pedagogy=pedagogy_obj
+        )
+        params_obj = {
+            name: Parameter(**p_data.model_dump())
+            for name, p_data in schema.parameters.items()
+        } if schema.parameters else {}
+        
+        components_obj = Components(**schema.components.model_dump())
+        
+        validation_obj = Validation(
+            **schema.validation.model_dump()
+        ) if schema.validation else Validation()
 
-@dataclass
-class ValidationResult:
-    """Represents the outcome of a validation check."""
-    valid: bool
-    code: str
-    errors: List[str] = field(default_factory=list)
+        return cls(
+            plse_version=schema.plse_version,
+            pattern_id=schema.pattern_id,
+            metadata=metadata_obj,
+            instruction=schema.instruction,
+            components=components_obj,
+            parameters=params_obj,
+            validation=validation_obj,
+            requires=schema.requires or []
+        )
