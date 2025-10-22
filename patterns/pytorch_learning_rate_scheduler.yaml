@@ -1,0 +1,121 @@
+plse_version: "2.0"
+pattern_id: "pytorch.training.lr_scheduler"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates the use of learning rate schedulers in PyTorch to dynamically
+    adjust the learning rate during training. This is a critical technique for
+    achieving stable convergence and optimal model performance. This pattern
+
+    contrasts a simple StepLR with a more advanced CosineAnnealingLR.
+  tags: [pytorch, pytorch-lightning, training, optimizer, learning-rate, best-practice]
+  pedagogy:
+    concept: "Learning Rate Scheduling"
+    difficulty: "intermediate"
+
+instruction: "Write a PyTorch script that demonstrates how to use a `{{ scheduler_type }}` learning rate scheduler. The script should attach the scheduler to an `{{ optimizer_type }}` optimizer and simulate a training run for {{ num_epochs }} epochs, printing the learning rate at each epoch."
+
+parameters:
+  scheduler_type:
+    type: "choice"
+    description: "The type of LR scheduler to demonstrate."
+    default: "StepLR"
+    constraints:
+      options: ["StepLR", "CosineAnnealingLR"]
+  optimizer_type:
+    type: "choice"
+    description: "The optimizer to pair with the scheduler."
+    default: "AdamW"
+    constraints:
+      options: ["AdamW", "SGD"]
+  num_epochs:
+    type: "choice"
+    description: "The total number of epochs to simulate."
+    default: 100
+    constraints:
+      options: [50, 100]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "torch.optim as optim"
+
+template: |
+  import torch
+  import torch.nn as nn
+  import torch.optim as optim
+
+  # --- 1. Setup a dummy model and optimizer ---
+  model = nn.Linear(10, 2)
+  
+  {% if optimizer_type == 'AdamW' %}
+  optimizer = optim.AdamW(model.parameters(), lr=0.1)
+  {% elif optimizer_type == 'SGD' %}
+  optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+  {% endif %}
+
+  # --- 2. Configure the selected Learning Rate Scheduler ---
+  print(f"--- Demonstrating the {{ scheduler_type }} Scheduler ---")
+  
+  {% if scheduler_type == 'StepLR' %}
+  # StepLR decays the learning rate by a factor of 'gamma' every 'step_size' epochs.
+  scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+  {% elif scheduler_type == 'CosineAnnealingLR' %}
+  # CosineAnnealingLR smoothly anneals the LR from its initial value down to 'eta_min'.
+  scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max={{ num_epochs }}, eta_min=0.001)
+  {% endif %}
+
+  # --- 3. Simulate a training loop to observe the LR changes ---
+  learning_rates = []
+  for epoch in range({{ num_epochs }}):
+      # In a real training loop, optimizer.step() would be called after loss.backward()
+      # optimizer.step() 
+      
+      # Get the current learning rate before the scheduler steps
+      current_lr = optimizer.param_groups[0]['lr']
+      learning_rates.append(current_lr)
+      
+      # Advance the scheduler
+      scheduler.step()
+
+  # --- 4. Print the results ---
+  print(f"Initial Learning Rate: {learning_rates[0]}")
+  print(f"Learning Rate at Epoch 50: {learning_rates[50]:.6f}")
+  print(f"Final Learning Rate: {learning_rates[-1]:.6f}")
+
+  # Optional: Plot the learning rate schedule
+  try:
+      import matplotlib.pyplot as plt
+      plt.figure(figsize=(10, 4))
+      plt.plot(range({{ num_epochs }}), learning_rates)
+      plt.title("Learning Rate Schedule: {{ scheduler_type }}")
+      plt.xlabel("Epoch")
+      plt.ylabel("Learning Rate")
+      plt.grid(True)
+      # plt.show() # In a script, you might save instead of show
+      print("\\nPlot generated (not shown in script execution).")
+  except ImportError:
+      print("\\nMatplotlib not found, skipping plot generation.")
+
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      assert 'learning_rates' in locals(), "The `learning_rates` list was not created."
+      assert len(learning_rates) == {{ num_epochs }}, "Incorrect number of learning rates were recorded."
+      
+      {% if scheduler_type == 'StepLR' %}
+      # For StepLR, the LR should be 0.1 for the first 30 epochs, then 0.01
+      assert abs(learning_rates[0] - 0.1) < 1e-6
+      assert abs(learning_rates[29] - 0.1) < 1e-6
+      assert abs(learning_rates[30] - 0.01) < 1e-6
+      {% elif scheduler_type == 'CosineAnnealingLR' %}
+      # For CosineAnnealingLR, the LR should be smoothly decreasing
+      assert learning_rates[0] > learning_rates[50]
+      assert learning_rates[50] > learning_rates[-1]
+      assert abs(learning_rates[-1] - 0.001) < 1e-6 # Should end at eta_min
+      {% endif %}
+      
+      print("Learning rate scheduler validation passed.")
