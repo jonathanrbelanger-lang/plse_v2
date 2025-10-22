@@ -1,0 +1,128 @@
+plse_version: "2.0"
+pattern_id: "python_performance_list_vs_generator_tradeoff"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    A dedicated "tradeoff" pattern that benchmarks and explains the nuanced
+    performance differences between a list comprehension and a generator expression.
+    It demonstrates that while generators are memory-superior for single-pass
+    iteration, lists are computationally superior when the data must be iterated
+    over multiple times. This teaches context-dependent optimization.
+  tags: [python, performance, trade-off, memory, cpu, list-comprehension, generator, expert]
+  pedagogy:
+    concept: "Algorithmic Trade-offs: Space vs. Time Complexity"
+    difficulty: "expert"
+
+instruction: "Write a Python script that benchmarks and compares a list comprehension and a generator expression. The script should measure both memory usage and execution time for two distinct scenarios: 1) a single pass over the data, and 2) multiple passes over the same data. Include comments in the output explaining the results and the trade-offs."
+
+parameters:
+  sequence_size:
+    type: "int"
+    description: "The number of items in the sequence to process."
+    default: 1_000_000
+  multi_pass_iterations:
+    type: "int"
+    description: "The number of times to iterate in the multi-pass scenario."
+    default: 100
+
+requires:
+  - "timeit"
+  - "tracemalloc"
+  - "functools"
+
+template: |
+  import timeit
+  import tracemalloc
+  from functools import partial
+
+  SEQUENCE_SIZE = {{ sequence_size }}
+  MULTI_PASS_ITERATIONS = {{ multi_pass_iterations }}
+
+  # --- Scenario 1: Single-Pass Iteration (e.g., summing all elements) ---
+
+  def single_pass_with_list():
+      """Creates a full list in memory and sums it."""
+      numbers = [i for i in range(SEQUENCE_SIZE)]
+      sum(numbers)
+
+  def single_pass_with_generator():
+      """Creates a generator and sums it, consuming items one by one."""
+      numbers = (i for i in range(SEQUENCE_SIZE))
+      sum(numbers)
+
+  # --- Scenario 2: Multi-Pass Iteration (e.g., multiple analyses on the same data) ---
+
+  def multi_pass_with_list():
+      """Creates a list and iterates over it multiple times."""
+      numbers = [i for i in range(SEQUENCE_SIZE)]
+      for _ in range(MULTI_PASS_ITERATIONS):
+          sum(numbers) # Repeatedly iterate over the list in memory
+
+  def multi_pass_with_generator():
+      """Demonstrates the flaw of using a generator for multiple passes."""
+      # A generator is exhausted after the first pass. To reuse it,
+      # it must be recreated on every iteration, which is highly inefficient.
+      for _ in range(MULTI_PASS_ITERATIONS):
+          numbers = (i for i in range(SEQUENCE_SIZE))
+          sum(numbers)
+
+  def measure_performance(func, scenario_name):
+      """Helper function to measure execution time and memory."""
+      print(f"--- Benchmarking: {scenario_name} ---")
+      
+      # Measure execution time
+      time_taken = timeit.timeit(func, number=1)
+      print(f"Execution Time: {time_taken:.4f} seconds")
+
+      # Measure memory usage
+      tracemalloc.start()
+      func()
+      _, peak_mem = tracemalloc.get_traced_memory()
+      tracemalloc.stop()
+      print(f"Peak Memory Usage: {peak_mem / 1024**2:.4f} MiB\\n")
+
+
+  if __name__ == "__main__":
+      print("="*60)
+      print("ANALYSIS: Comparing List Comprehension vs. Generator Expression")
+      print("="*60)
+
+      # Run benchmarks
+      measure_performance(single_pass_with_list, "Single Pass with List")
+      measure_performance(single_pass_with_generator, "Single Pass with Generator")
+      measure_performance(multi_pass_with_list, "Multi Pass with List")
+      measure_performance(multi_pass_with_generator, "Multi Pass with Generator")
+
+      print("--- CONCLUSION ---")
+      print("1. Single Pass: The Generator is superior. It has a tiny, constant memory footprint and is often faster as it avoids the upfront cost of allocating a large list.")
+      print("2. Multi Pass: The List is superior. It is created once and reused, making it much faster. The generator must be recreated for each pass, negating its benefits and making it slower.")
+      print("\\nThis demonstrates the core trade-off: Use generators for memory-efficient single-pass iteration. Use lists when you need to store and reuse the data multiple times.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The validation for a benchmark pattern is to ensure the core logic runs
+      # and produces a numerically correct result. The primary output is the
+      # analysis printed to the console.
+      
+      # Test the single-pass logic
+      list_sum = sum([i for i in range(100)])
+      gen_sum = sum((i for i in range(100)))
+      assert list_sum == gen_sum, "Single-pass sum should be identical."
+      
+      # Test the multi-pass logic
+      list_multi_sum = 0
+      numbers_list = [i for i in range(100)]
+      for _ in range(10):
+          list_multi_sum += sum(numbers_list)
+          
+      gen_multi_sum = 0
+      for _ in range(10):
+          numbers_gen = (i for i in range(100))
+          gen_multi_sum += sum(numbers_gen)
+          
+      assert list_multi_sum == gen_multi_sum, "Multi-pass sums should be identical."
+      
+      print("Tradeoff pattern validation passed: Core logic is correct.")
