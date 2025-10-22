@@ -1,0 +1,142 @@
+plse_version: "2.0"
+pattern_id: "python.scientific.pso_joblib"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from DefTrinHTLCompr.ipynb)"
+  description: |
+    Demonstrates a high-performance Particle Swarm Optimizer (PSO) that uses
+    NumPy for vectorized operations and the 'joblib' library for parallel
+    fitness evaluation across multiple CPU cores. This is a key pattern for
+    accelerating CPU-bound, gradient-free optimization tasks.
+  tags: [python, pso, optimization, numpy, joblib, parallelism, scientific-computing]
+  pedagogy:
+    concept: "Parallel CPU-Bound Optimization"
+    difficulty: "advanced"
+
+instruction: "Write a '{{ class_name }}' class for Particle Swarm Optimization. The implementation must be vectorized using NumPy and use 'joblib.Parallel' with `n_jobs={{ n_jobs }}` to evaluate the fitness of the swarm in parallel."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the parallel PSO class."
+    default: "ParallelPSO"
+    constraints:
+      options: ["ParallelPSO", "JoblibOptimizer", "VectorizedSwarm"]
+  objective_func_name:
+    type: "choice"
+    description: "The name of the objective function to optimize."
+    default: "sphere_function"
+    constraints:
+      options: ["sphere_function", "rosenbrock_function"]
+  n_jobs:
+    type: "choice"
+    description: "The number of parallel jobs for joblib."
+    default: -1
+    constraints:
+      options: [-1, -2, 4] # -1: all cores, -2: all but one, 4: specific number
+
+requires:
+  - "numpy as np"
+  - "from joblib import Parallel, delayed"
+  - "import os"
+
+template: |
+  # Define an objective function for the optimizer to solve
+  {% if objective_func_name == 'sphere_function' %}
+  def {{ objective_func_name }}(x):
+      """A simple, convex objective function. Minimum is 0 at x=[0,0,...]."""
+      return np.sum(x**2)
+  {% elif objective_func_name == 'rosenbrock_function' %}
+  def {{ objective_func_name }}(x):
+      """A non-convex function with a narrow, parabolic valley."""
+      return np.sum(100.0 * (x[1:] - x[:-1]**2.0)**2.0 + (1 - x[:-1])**2.0)
+  {% endif %}
+
+  class {{ class_name }}:
+      """
+      A vectorized and parallelized Particle Swarm Optimizer.
+      """
+      def __init__(self, objective_func, n_particles, n_dims, bounds, max_iter, n_jobs={{ n_jobs }}):
+          self.objective_func = objective_func
+          self.n_particles = n_particles
+          self.n_dims = n_dims
+          self.bounds = np.array(bounds)
+          self.max_iter = max_iter
+          self.n_jobs = n_jobs
+
+          # PSO parameters
+          self.w, self.c1, self.c2 = 0.729, 1.494, 1.494
+
+          # Initialize swarm state using vectorized numpy operations
+          self.positions = np.random.uniform(self.bounds[0, :], self.bounds[1, :], (n_particles, n_dims))
+          self.velocities = np.zeros((n_particles, n_dims))
+          
+          self.pbest_positions = self.positions.copy()
+          # Evaluate initial fitness in parallel using joblib
+          self.pbest_fitness = np.array(
+              Parallel(n_jobs=self.n_jobs)(delayed(self.objective_func)(p) for p in self.pbest_positions)
+          )
+          
+          gbest_idx = np.argmin(self.pbest_fitness)
+          self.gbest_position = self.pbest_positions[gbest_idx].copy()
+          self.gbest_fitness = self.pbest_fitness[gbest_idx]
+
+      def optimize(self):
+          """Runs the main optimization loop."""
+          for i in range(self.max_iter):
+              # Generate random numbers for all particles in one go
+              r1 = np.random.rand(self.n_particles, self.n_dims)
+              r2 = np.random.rand(self.n_particles, self.n_dims)
+
+              # --- Vectorized Velocity and Position Updates ---
+              cognitive_term = self.c1 * r1 * (self.pbest_positions - self.positions)
+              social_term = self.c2 * r2 * (self.gbest_position - self.positions)
+              self.velocities = self.w * self.velocities + cognitive_term + social_term
+              self.positions += self.velocities
+              
+              # Apply bounds
+              self.positions = np.clip(self.positions, self.bounds[0, :], self.bounds[1, :])
+
+              # --- Parallel Fitness Evaluation ---
+              current_fitness = np.array(
+                  Parallel(n_jobs=self.n_jobs)(delayed(self.objective_func)(p) for p in self.positions)
+              )
+
+              # Update personal bests
+              improvement_mask = current_fitness < self.pbest_fitness
+              self.pbest_positions[improvement_mask] = self.positions[improvement_mask]
+              self.pbest_fitness[improvement_mask] = current_fitness[improvement_mask]
+
+              # Update global best
+              current_gbest_idx = np.argmin(self.pbest_fitness)
+              if self.pbest_fitness[current_gbest_idx] < self.gbest_fitness:
+                  self.gbest_fitness = self.pbest_fitness[current_gbest_idx]
+                  self.gbest_position = self.pbest_positions[current_gbest_idx].copy()
+              
+              if (i + 1) % 10 == 0:
+                  print(f"Iteration {i+1}/{self.max_iter}, Best Fitness: {self.gbest_fitness:.6f}")
+          
+          return self.gbest_position, self.gbest_fitness
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the optimizer on a simple problem
+      DIMS = 5
+      BOUNDS = [[-5.12] * DIMS, [5.12] * DIMS]
+      
+      optimizer = {{ class_name }}(
+          objective_func={{ objective_func_name }},
+          n_particles=30,
+          n_dims=DIMS,
+          bounds=BOUNDS,
+          max_iter=100,
+          n_jobs=2 # Use 2 cores for testing
+      )
+      
+      best_pos, best_fit = optimizer.optimize()
+      
+      # The optimizer should find a solution very close to the known minimum (0.0)
+      assert best_fit < 1e-4, f"Optimizer failed to converge. Final fitness: {best_fit}"
+      print("PSO optimizer test passed successfully.")
