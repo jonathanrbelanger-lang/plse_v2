@@ -1,0 +1,122 @@
+plse_version: "2.0"
+pattern_id: "python_concurrency_threading_vs_multiprocessing_tradeoff"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    A crucial "tradeoff" pattern that benchmarks and explains the difference
+    between threading and multiprocessing in Python, focusing on the impact of the
+    Global Interpreter Lock (GIL). It demonstrates that threading excels for I/O-bound
+    concurrency, while multiprocessing is necessary for true CPU-bound parallelism.
+  tags: [python, concurrency, parallelism, gil, threading, multiprocessing, performance, trade-off, expert]
+  pedagogy:
+    concept: "Choosing the Right Concurrency Model (GIL Awareness)"
+    difficulty: "expert"
+
+instruction: "Write a Python script that benchmarks and compares the performance of `ThreadPoolExecutor` and `ProcessPoolExecutor` for two distinct workloads: an I/O-bound task (like a network request) and a CPU-bound task (like a heavy calculation). The output must explain why each executor is suited for its respective task, referencing the Global Interpreter Lock (GIL)."
+
+parameters:
+  num_tasks:
+    type: "int"
+    description: "The number of concurrent tasks to run in each benchmark."
+    default: 10
+  num_workers:
+    type: "int"
+    description: "The number of worker threads or processes in the executor pool."
+    default: 4
+
+requires:
+  - "time"
+  - "concurrent.futures"
+
+template: |
+  import time
+  from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+
+  NUM_TASKS = {{ num_tasks }}
+  NUM_WORKERS = {{ num_workers }}
+
+  # --- 1. Define the two types of workloads ---
+
+  def io_bound_task(task_id: int):
+      """Simulates a task that waits for I/O, like a network request."""
+      # print(f"Starting I/O-bound task {task_id}...")
+      time.sleep(0.5) # The GIL is released during this sleep call.
+      # print(f"Finished I/O-bound task {task_id}.")
+      return f"I/O Task {task_id} complete"
+
+  def cpu_bound_task(task_id: int):
+      """Simulates a task that performs a heavy computation."""
+      # print(f"Starting CPU-bound task {task_id}...")
+      result = 0
+      for i in range(10**7):
+          result += i
+      # print(f"Finished CPU-bound task {task_id}.")
+      return f"CPU Task {task_id} complete with result {result}"
+
+  def run_benchmark(executor_class, task_func, num_tasks, num_workers):
+      """Helper function to run tasks with a given executor."""
+      start_time = time.perf_counter()
+      with executor_class(max_workers=num_workers) as executor:
+          futures = [executor.submit(task_func, i) for i in range(num_tasks)]
+          results = [f.result() for f in futures]
+      end_time = time.perf_counter()
+      return end_time - start_time
+
+  # --- 2. Run the benchmarks and analyze results ---
+  if __name__ == "__main__":
+      print("="*80)
+      print("ANALYSIS: Threading vs. Multiprocessing for I/O-Bound vs. CPU-Bound Tasks")
+      print(f"(Running {NUM_TASKS} tasks with {NUM_WORKERS} workers each)")
+      print("="*80)
+
+      # --- I/O-Bound Scenario ---
+      print("\\n--- SCENARIO 1: I/O-Bound Workload (e.g., network calls) ---")
+      thread_io_time = run_benchmark(ThreadPoolExecutor, io_bound_task, NUM_TASKS, NUM_WORKERS)
+      process_io_time = run_benchmark(ProcessPoolExecutor, io_bound_task, NUM_TASKS, NUM_WORKERS)
+      print(f"ThreadPoolExecutor (I/O): {thread_io_time:.4f} seconds")
+      print(f"ProcessPoolExecutor (I/O): {process_io_time:.4f} seconds")
+      print("ANALYSIS: Both show a significant speedup. Threads are effective because the GIL is released during I/O operations, allowing other threads to run. Threading is often preferred here due to lower memory overhead.")
+
+      # --- CPU-Bound Scenario ---
+      print("\\n--- SCENARIO 2: CPU-Bound Workload (e.g., heavy calculations) ---")
+      thread_cpu_time = run_benchmark(ThreadPoolExecutor, cpu_bound_task, NUM_TASKS, NUM_WORKERS)
+      process_cpu_time = run_benchmark(ProcessPoolExecutor, cpu_bound_task, NUM_TASKS, NUM_WORKERS)
+      print(f"ThreadPoolExecutor (CPU): {thread_cpu_time:.4f} seconds")
+      print(f"ProcessPoolExecutor (CPU): {process_cpu_time:.4f} seconds")
+      print("ANALYSIS: Only multiprocessing shows a speedup. The GIL prevents threads from running Python bytecode in parallel on multiple cores. Multiprocessing bypasses the GIL by using separate processes, achieving true parallelism.")
+
+      # --- Conclusion ---
+      print("\\n--- CONCLUSION ---")
+      print("  - Use `threading` for I/O-bound tasks to achieve concurrency without high overhead.")
+      print("  - Use `multiprocessing` for CPU-bound tasks to bypass the GIL and achieve true parallelism.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that the benchmark harness functions correctly
+      # by running a minimal version of the tasks and checking the results.
+      
+      def simple_io(x):
+          time.sleep(0.01)
+          return x * 2
+          
+      def simple_cpu(x):
+          return sum(i for i in range(x))
+
+      # Test ThreadPoolExecutor
+      with ThreadPoolExecutor(max_workers=2) as executor:
+          io_results = list(executor.map(simple_io, [1, 2]))
+          cpu_results = list(executor.map(simple_cpu, [10, 20]))
+      assert io_results == [2, 4]
+      assert cpu_results == [45, 190]
+      
+      # Test ProcessPoolExecutor
+      with ProcessPoolExecutor(max_workers=2) as executor:
+          io_results = list(executor.map(simple_io, [1, 2]))
+          cpu_results = list(executor.map(simple_cpu, [10, 20]))
+      assert io_results == [2, 4]
+      assert cpu_results == [45, 190]
+      
+      print("Tradeoff pattern validation passed: Both executors function correctly.")
