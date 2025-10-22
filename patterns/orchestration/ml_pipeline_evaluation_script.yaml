@@ -1,0 +1,153 @@
+plse_version: "2.0"
+pattern_id: "orchestration_ml_pipeline_pytorch_evaluation_script"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a complete PyTorch evaluation script. Unlike a simple prediction
+    script, this pattern demonstrates how to perform bulk inference on a
+    test dataset using a DataLoader, aggregate the results, compute comprehensive
+    metrics (Accuracy, Precision, Recall, F1) using scikit-learn, and save
+    the results to a structured JSON report.
+  tags: [orchestration, python, pytorch, sklearn, mlops, evaluation, metrics, script, best-practice]
+  pedagogy:
+    concept: "Structuring a Robust Model Evaluation Pipeline"
+    difficulty: "expert"
+
+instruction: |
+  Write a Python script to evaluate a trained {{ model_architecture }} model on a test dataset.
+  The script should use a PyTorch DataLoader for efficient batch processing.
+  It must compute the overall accuracy and a full classification report (precision, recall, F1-score),
+  and save these metrics to a JSON file named 'evaluation_metrics.json'.
+
+parameters:
+  model_architecture:
+    type: "choice"
+    description: "The model architecture to evaluate."
+    default: "resnet18"
+    constraints:
+      options: ["resnet18", "resnet34"]
+  batch_size:
+    type: "int"
+    description: "Batch size for evaluation."
+    default: 64
+  num_classes:
+    type: "int"
+    description: "Number of classes in the dataset."
+    default: 10
+
+requires: [torch, torchvision, sklearn, argparse, json]
+
+components:
+  imports: |
+    import argparse
+    import torch
+    import torch.nn as nn
+    from torchvision import datasets, models, transforms
+    from torch.utils.data import DataLoader
+    from sklearn.metrics import classification_report, accuracy_score
+    import json
+    import os
+
+  data_setup: |
+    # Helper to create a dataloader for the test set.
+    def get_test_dataloader(batch_size):
+        """Creates a dataloader for the test dataset."""
+        print("Initializing test dataloader...")
+        # Using standard ImageNet normalization for consistency
+        transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        # Using FakeData for a self-contained, runnable example
+        test_dataset = datasets.FakeData(size=500, image_size=(3, 224, 224), num_classes={{ num_classes }}, transform=transform)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
+        return test_loader
+
+  evaluation: |
+    # Helper to save the computed metrics to a structured JSON file.
+    # This is a key MLOps best practice for tracking experiment results.
+    def save_metrics(metrics, filename="evaluation_metrics.json"):
+        """Saves the metrics dictionary to a JSON file."""
+        try:
+            with open(filename, 'w') as f:
+                json.dump(metrics, f, indent=4)
+            print(f"Metrics successfully saved to '{filename}'")
+        except Exception as e:
+            print(f"Error saving metrics: {e}")
+
+  model_definition: |
+    # Main execution block.
+    def main():
+        parser = argparse.ArgumentParser(description="PyTorch Model Evaluation Script")
+        parser.add_argument('--model-path', type=str, default="best_model.pth", help='Path to the trained model')
+        parser.add_argument('--batch-size', type=int, default={{ batch_size }}, help='Batch size for evaluation')
+        args = parser.parse_args()
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
+
+        # 1. Load Model (Architecture + Weights)
+        print(f"Loading model ('{{ model_architecture }}')...")
+        if "{{ model_architecture }}" == "resnet18":
+            model = models.resnet18(weights=None)
+        else:
+            model = models.resnet34(weights=None)
+        
+        # Adjust final layer
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, {{ num_classes }})
+        
+        # Load weights
+        if os.path.exists(args.model_path):
+             model.load_state_dict(torch.load(args.model_path, map_location=device))
+        else:
+             print(f"Warning: Model file '{args.model_path}' not found. Using random weights for demonstration.")
+
+        model = model.to(device)
+        model.eval() # CRITICAL: Set to evaluation mode
+
+        # 2. Prepare Data
+        test_loader = get_test_dataloader(args.batch_size)
+
+        # 3. Run Bulk Inference
+        print("Starting evaluation loop...")
+        all_preds = []
+        all_labels = []
+        
+        with torch.no_grad(): # CRITICAL: Disable gradient tracking
+            for inputs, labels in test_loader:
+                inputs = inputs.to(device)
+                outputs = model(inputs)
+                _, preds = torch.max(outputs, 1)
+                
+                # Move to CPU and convert to numpy for sklearn metrics
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.numpy())
+
+        # 4. Compute Metrics
+        print("Computing metrics...")
+        accuracy = accuracy_score(all_labels, all_preds)
+        report = classification_report(all_labels, all_preds, output_dict=True, zero_division=0)
+        
+        metrics = {
+            "overall_accuracy": accuracy,
+            "detailed_report": report
+        }
+        
+        print(f"Evaluation complete. Accuracy: {accuracy:.4f}")
+        
+        # 5. Save Report
+        save_metrics(metrics)
+
+    if __name__ == '__main__':
+        main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Validates that the script runs successfully and produces the JSON report.
+      shell_exec: python {{ SCRIPT_PATH }} --batch-size 16 && test -f evaluation_metrics.json
