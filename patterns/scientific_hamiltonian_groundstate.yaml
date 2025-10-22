@@ -1,0 +1,120 @@
+plse_version: "2.0"
+pattern_id: "python.scientific.hamiltonian_groundstate"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates how to construct a Hamiltonian matrix for a simple quantum spin system
+    and compute its ground state using numerical diagonalization. This pattern teaches
+    the implementation of physical models using NumPy for matrix operations and SciPy
+    for efficient eigenvalue decomposition.
+  tags: [python, scientific-computing, numpy, scipy, physics, linear-algebra]
+  pedagogy:
+    concept: "Hamiltonian Construction and Diagonalization"
+    difficulty: "advanced"
+
+instruction: "Write a Python script to build the Hamiltonian for a {{ num_sites }}-site spin system with parameters E_state={{ e_state }} and E_trans={{ e_trans }}. Then, use `scipy.linalg.eigh` to find and normalize the ground state eigenvector."
+
+parameters:
+  num_sites:
+    type: "choice"
+    description: "The number of sites in the spin system, determining the Hilbert space dimension (2^N)."
+    default: 4
+    constraints:
+      options: [2, 4, 6] # Keep small to ensure fast computation
+  e_state:
+    type: "choice"
+    description: "Energy parameter for the 'P' operator (on-site energy)."
+    default: -60.0
+    constraints:
+      options: [-60.0, -1.0, 1.0]
+  e_trans:
+    type: "choice"
+    description: "Energy parameter for the 'F' operator (transition energy)."
+    default: -2.0
+    constraints:
+      options: [-2.0, -0.5, 0.5]
+
+requires:
+  - "numpy as np"
+  - "from scipy.linalg import eigh"
+
+template: |
+  # Define system constants
+  NUM_SITES = {{ num_sites }}
+  HILBERT_DIM = 2**NUM_SITES
+  E_STATE = {{ e_state }}
+  E_TRANS = {{ e_trans }}
+
+  def index_to_bits(k: int, num_bits: int) -> np.ndarray:
+      """Converts an integer index to its binary representation as a NumPy array."""
+      # Example: k=5, num_bits=4 -> [0, 1, 0, 1]
+      binary_string = format(k, f'0{num_bits}b')
+      return np.array([int(bit) for bit in binary_string], dtype=np.int8)
+
+  def generate_p_matrix(dim: int, num_sites: int) -> np.ndarray:
+      """Generates the matrix for the P operator (sum of sigma_z)."""
+      matrix = np.zeros((dim, dim), dtype=np.float64)
+      for k in range(dim):
+          bits = index_to_bits(k, num_sites)
+          # sigma_z eigenvalue is +1 for spin up (0) and -1 for spin down (1)
+          diag_value = np.sum(1 - 2 * bits)
+          matrix[k, k] = diag_value
+      return matrix
+
+  def generate_f_matrix(dim: int, num_sites: int) -> np.ndarray:
+      """Generates the matrix for the F operator (a type of transition)."""
+      matrix = np.zeros((dim, dim), dtype=np.float64)
+      for k in range(dim):
+          bits = index_to_bits(k, num_sites)
+          # This example flips the first spin (sigma_x_0)
+          k_prime = k ^ (1 << (num_sites - 1)) # Bitwise XOR to flip the most significant bit
+          if k_prime < dim:
+              matrix[k, k_prime] = 1.0
+      return matrix
+
+  def find_ground_state(hamiltonian: np.ndarray) -> np.ndarray:
+      """
+      Diagonalizes a Hamiltonian matrix to find the ground state eigenvector.
+      
+      Returns:
+          The normalized ground state vector (eigenvector with the lowest eigenvalue).
+      """
+      # 'eigh' is used for Hermitian matrices, which is typical for Hamiltonians.
+      # It is faster and more numerically stable than 'eig'.
+      eigenvalues, eigenvectors = eigh(hamiltonian)
+      
+      # The ground state is the eigenvector corresponding to the minimum eigenvalue.
+      ground_state_vector = eigenvectors[:, 0]
+      return ground_state_vector
+
+  # --- Main execution ---
+  # 1. Construct the operator matrices
+  p_matrix = generate_p_matrix(HILBERT_DIM, NUM_SITES)
+  f_matrix = generate_f_matrix(HILBERT_DIM, NUM_SITES)
+
+  # 2. Build the full Hamiltonian
+  hamiltonian_matrix = E_STATE * p_matrix + E_TRANS * f_matrix
+
+  # 3. Find the ground state
+  psi_0 = find_ground_state(hamiltonian_matrix)
+
+  print(f"Hamiltonian for {NUM_SITES} sites constructed (shape: {hamiltonian_matrix.shape}).")
+  print(f"Ground state vector found (shape: {psi_0.shape}).")
+  print(f"Norm of ground state: {np.linalg.norm(psi_0):.2f}")
+
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the properties of the generated Hamiltonian and ground state
+      assert hamiltonian_matrix.shape == (HILBERT_DIM, HILBERT_DIM), "Hamiltonian has incorrect shape."
+      # A key property of a Hamiltonian is that it must be Hermitian (equal to its conjugate transpose).
+      # For a real matrix, this simplifies to being symmetric.
+      assert np.allclose(hamiltonian_matrix, hamiltonian_matrix.T), "Hamiltonian is not symmetric."
+      
+      assert psi_0.shape == (HILBERT_DIM,), "Ground state vector has incorrect shape."
+      # Eigenvectors from eigh are guaranteed to be normalized.
+      assert np.isclose(np.linalg.norm(psi_0), 1.0), "Ground state vector is not normalized."
+      print("Physics model validation passed.")
