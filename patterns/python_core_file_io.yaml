@@ -1,0 +1,96 @@
+plse_version: "2.0"
+pattern_id: "python.core.file_io_with_context_manager"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the robust and idiomatic way to perform file I/O (Input/Output)
+    in Python using a `with` statement. This pattern, known as a context manager,
+    guarantees that the file is properly closed, even if errors occur during
+    processing.
+  tags: [python, core-language, file-io, context-manager, best-practice, resource-management]
+  pedagogy:
+    concept: "Safe File Handling with Context Managers"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that demonstrates how to safely write to and then read from a file named `{{ filename }}` using the `with open(...)` context manager."
+
+parameters:
+  filename:
+    type: "choice"
+    description: "The name of the file to be created and read."
+    default: "data.txt"
+    constraints:
+      options: ["data.txt", "log.txt", "output.csv"]
+  content_var:
+    type: "choice"
+    description: "The variable name for the content to be written."
+    default: "lines_to_write"
+    constraints:
+      options: ["lines_to_write", "file_content", "data_rows"]
+
+requires:
+  - "os"
+
+template: |
+  import os
+
+  # --- Configuration ---
+  FILENAME = "{{ filename }}"
+  {{ content_var }} = [
+      "First line of text.\\n",
+      "Second line with numbers: 123\\n",
+      "Third and final line.\\n"
+  ]
+
+  # --- 1. Writing to a file using a context manager ---
+  print(f"--- Writing to '{FILENAME}' ---")
+  try:
+      # The 'with' statement ensures the file is automatically closed.
+      with open(FILENAME, "w", encoding="utf-8") as f:
+          f.writelines({{ content_var }})
+          print("  - File opened and written to successfully.")
+      # At this point, f is automatically closed.
+      print("  - Context manager has automatically closed the file.")
+  except IOError as e:
+      print(f"  - An error occurred during writing: {e}")
+
+  # --- 2. Reading from a file using a context manager ---
+  print(f"\\n--- Reading from '{FILENAME}' ---")
+  read_content = []
+  try:
+      if os.path.exists(FILENAME):
+          with open(FILENAME, "r", encoding="utf-8") as f:
+              read_content = f.readlines()
+              print("  - File opened and read successfully.")
+          print("  - Context manager has automatically closed the file.")
+          
+          print("\\n--- File Content ---")
+          for line in read_content:
+              print(f"  > {line.strip()}")
+      else:
+          print(f"  - File '{FILENAME}' not found for reading.")
+  except IOError as e:
+      print(f"  - An error occurred during reading: {e}")
+  finally:
+      # --- 3. Cleanup ---
+      # Best practice to clean up created files in an example script.
+      if os.path.exists(FILENAME):
+          os.remove(FILENAME)
+          print(f"\\n--- Cleanup: Removed '{FILENAME}' ---")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The script is self-verifying by reading what it wrote.
+      # This test checks the final state of the `read_content` variable.
+      
+      # Convert the original content to match what readlines() would produce
+      expected_content = [line for line in {{ content_var }}]
+      
+      assert 'read_content' in locals(), "`read_content` variable was not created."
+      assert read_content == expected_content, "Content read from the file does not match what was written."
+      assert not os.path.exists(FILENAME), "Cleanup step failed to remove the file."
+      
+      print("File I/O with context manager validation passed.")
