@@ -1,0 +1,105 @@
+plse_version: "2.0"
+pattern_id: "python_philosophy_eafp_vs_lbyl_tradeoff"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    A "tradeoff" pattern that benchmarks the EAFP (Easier to Ask for Forgiveness
+    than Permission) and LBYL (Look Before You Leap) error handling styles.
+    It demonstrates that EAFP is faster when errors are rare, while LBYL is
+    faster when errors are common, teaching the context-dependent nature of
+    this core Python philosophy.
+  tags: [python, philosophy, trade-off, performance, eafp, lbyl, error-handling, expert]
+  pedagogy:
+    concept: "Context-Dependent Error Handling (EAFP vs. LBYL)"
+    difficulty: "expert"
+
+instruction: "Write a Python script that benchmarks and compares the EAFP and LBYL error handling styles for dictionary key access. The script must measure performance for two distinct scenarios: 1) where key lookups succeed most of the time (failures are rare), and 2) where key lookups fail most of the time (failures are common). Include comments explaining the performance results and the trade-offs."
+
+parameters:
+  num_iterations:
+    type: "int"
+    description: "The number of lookups to perform in each benchmark."
+    default: 1_000_000
+  data_dict_var:
+    type: "choice"
+    description: "The variable name for the dictionary."
+    default: "data_dict"
+    constraints:
+      options: ["data_dict", "lookup_table", "config"]
+
+requires:
+  - "timeit"
+
+template: |
+  import timeit
+
+  # --- Setup ---
+  NUM_ITERATIONS = {{ num_iterations }}
+  {{ data_dict_var }} = {'key_that_exists': 1}
+  SUCCESS_KEY = 'key_that_exists'
+  FAILURE_KEY = 'key_that_does_not_exist'
+
+  # --- 1. Define the two styles as functions for benchmarking ---
+
+  def get_value_lbyl(d, key):
+      """Look Before You Leap: Check for key existence first."""
+      if key in d:
+          return d[key]
+      return None
+
+  def get_value_eafp(d, key):
+      """Easier to Ask for Forgiveness than Permission: Use try/except."""
+      try:
+          return d[key]
+      except KeyError:
+          return None
+
+  # --- 2. Run the benchmarks ---
+
+  print("="*60)
+  print("ANALYSIS: Comparing EAFP vs. LBYL Performance")
+  print("="*60)
+
+  # Scenario A: Success is the common case (99.9% success rate)
+  print(f"--- Scenario A: Failure is RARE ---")
+  lbyl_success_time = timeit.timeit(lambda: get_value_lbyl({{ data_dict_var }}, SUCCESS_KEY), number=NUM_ITERATIONS)
+  eafp_success_time = timeit.timeit(lambda: get_value_eafp({{ data_dict_var }}, SUCCESS_KEY), number=NUM_ITERATIONS)
+  print(f"LBYL (Success): {lbyl_success_time:.4f} seconds")
+  print(f"EAFP (Success): {eafp_success_time:.4f} seconds")
+  print(f"Result: EAFP is typically faster when exceptions are rare because it avoids the extra 'if key in d' check.\\n")
+
+  # Scenario B: Failure is the common case (100% failure rate)
+  print(f"--- Scenario B: Failure is COMMON ---")
+  lbyl_failure_time = timeit.timeit(lambda: get_value_lbyl({{ data_dict_var }}, FAILURE_KEY), number=NUM_ITERATIONS)
+  eafp_failure_time = timeit.timeit(lambda: get_value_eafp({{ data_dict_var }}, FAILURE_KEY), number=NUM_ITERATIONS)
+  print(f"LBYL (Failure): {lbyl_failure_time:.4f} seconds")
+  print(f"EAFP (Failure): {eafp_failure_time:.4f} seconds")
+  print(f"Result: LBYL is significantly faster when exceptions are common because the overhead of raising and catching an exception is much higher than a simple 'if' check.\\n")
+
+  # --- 3. Conclusion ---
+  print("--- CONCLUSION ---")
+  print("The choice between EAFP and LBYL is a performance trade-off that depends on the expected frequency of errors.")
+  print("  - Use EAFP (try/except) when you expect the operation to succeed most of the time.")
+  print("  - Use LBYL (if/else) when you expect the operation to fail frequently.")
+  print("In many Python contexts (e.g., file I/O, attribute access), success is the norm, making EAFP the more common and 'Pythonic' choice.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that both functions are functionally equivalent,
+      # returning the correct value on success and None on failure.
+      # This isolates performance as the key difference being benchmarked.
+      
+      test_dict = {'a': 1}
+      
+      # Test success case
+      assert get_value_lbyl(test_dict, 'a') == 1
+      assert get_value_eafp(test_dict, 'a') == 1
+      
+      # Test failure case
+      assert get_value_lbyl(test_dict, 'b') is None
+      assert get_value_eafp(test_dict, 'b') is None
+      
+      print("Tradeoff pattern validation passed: Both EAFP and LBYL functions are logically correct.")
