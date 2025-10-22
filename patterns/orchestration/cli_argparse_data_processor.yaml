@@ -1,0 +1,111 @@
+plse_version: "2.0"
+pattern_id: "orchestration_cli_argparse_data_processor"
+
+metadata:
+  author: "PLSE v2.0 Orchestration Library"
+  description: |
+    Generates a complete, executable command-line tool using Python's `argparse`
+    module. This pattern teaches how to move beyond hardcoded scripts to create
+    flexible, reusable tools that accept parameters like file paths and flags
+    from the command line. It demonstrates defining arguments, parsing them, and
+    using them to control the script's execution flow.
+  tags: [orchestration, python, cli, argparse, script, tooling, best-practice]
+  pedagogy:
+    concept: "Building a Configurable Command-Line Tool with argparse"
+    difficulty: "intermediate"
+
+instruction: "Write a complete Python script that processes a CSV file. The script must use the `argparse` module to accept the input file path, the output file path, and the name of a column to convert to uppercase as command-line arguments."
+
+parameters:
+  processing_function_name:
+    type: "choice"
+    description: "The name of the core data processing function."
+    default: "process_csv"
+    constraints:
+      options: ["process_csv", "transform_data", "run_pipeline"]
+  input_arg_name:
+    type: "choice"
+    description: "The long-form name for the input file argument."
+    default: "--input-file"
+    constraints:
+      options: ["--input-file", "--source-path", "--infile"]
+  output_arg_name:
+    type: "choice"
+    description: "The long-form name for the output file argument."
+    default: "--output-file"
+    constraints:
+      options: ["--output-file", "--destination-path", "--outfile"]
+
+requires: [argparse, pandas, os]
+
+components:
+  imports: |
+    import argparse
+    import pandas as pd
+    import os
+
+  data_setup: |
+    # This block contains the core logic as a helper function.
+    # This separates the "what" (the logic) from the "how" (the CLI orchestration).
+    def {{ processing_function_name }}(input_path: str, output_path: str, column_to_upper: str):
+        """Loads a CSV, converts a specified column to uppercase, and saves it."""
+        print(f"Reading data from '{input_path}'...")
+        try:
+            df = pd.read_csv(input_path)
+        except FileNotFoundError:
+            print(f"Error: Input file not found at '{input_path}'")
+            return
+
+        if column_to_upper not in df.columns:
+            print(f"Error: Column '{column_to_upper}' not found in the input file.")
+            return
+
+        print(f"Converting column '{column_to_upper}' to uppercase...")
+        df[column_to_upper] = df[column_to_upper].str.upper()
+
+        print(f"Saving transformed data to '{output_path}'...")
+        df.to_csv(output_path, index=False)
+        print("Processing complete.")
+
+  model_definition: |
+    # This is the main execution block, containing the argparse setup
+    # and the orchestration of the helper function.
+    def main():
+        """Parses command-line arguments and runs the data processing."""
+        parser = argparse.ArgumentParser(description="A simple CSV processing tool.")
+
+        # Define the command-line arguments
+        parser.add_argument("{{ input_arg_name }}", type=str, help="Path to the input CSV file.")
+        parser.add_argument("{{ output_arg_name }}", type=str, help="Path for the output CSV file.")
+        parser.add_argument("--column", type=str, required=True, help="Name of the column to convert to uppercase.")
+
+        args = parser.parse_args()
+
+        # Orchestrate the core logic using the parsed arguments
+        {{ processing_function_name }}(
+            input_path=args.{{ input_arg_name.replace('--', '') }},
+            output_path=args.{{ output_arg_name.replace('--', '') }},
+            column_to_upper=args.column
+        )
+
+    if __name__ == '__main__':
+        main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test 1: Validate the --help message. This is a simple, powerful way
+      # to confirm that argparse is set up correctly and the script is executable.
+      shell_exec: python {{ SCRIPT_PATH }} --help
+    - |
+      # Test 2: Perform an end-to-end run to validate the full script logic.
+      # 1. Create a dummy input file.
+      # 2. Run the script with arguments.
+      # 3. Check that the output file is created and is not empty.
+      shell_exec: |
+        echo "name,value\nalice,10\nbob,20" > test_input.csv && \
+        python {{ SCRIPT_PATH }} --input-file test_input.csv --output-file test_output.csv --column name && \
+        test -s test_output.csv
+      
+      # Note: A more advanced test could also read test_output.csv and assert its contents.
