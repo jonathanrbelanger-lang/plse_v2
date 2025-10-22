@@ -1,0 +1,112 @@
+plse_version: "2.0"
+pattern_id: "python.stdlib.collections"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the use of powerful, specialized data structures from Python's
+    `collections` module. This pattern shows how `collections.defaultdict` can
+    simplify grouping logic and how `collections.Counter` can efficiently
+    perform frequency counts.
+  tags: [python, core-language, standard-library, collections, defaultdict, counter, best-practice]
+  pedagogy:
+    concept: "Specialized Collection Types"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that demonstrates the use of `collections.{{ class_to_show }}`. The script should show how this specialized class can solve a common data aggregation problem more elegantly than using a standard dictionary."
+
+parameters:
+  class_to_show:
+    type: "choice"
+    description: "The specific collections class to demonstrate."
+    default: "defaultdict"
+    constraints:
+      options: ["defaultdict", "Counter"]
+  data_var_name:
+    type: "choice"
+    description: "The variable name for the source data."
+    default: "data"
+    constraints:
+      options: ["data", "items", "records"]
+
+requires:
+  - "from collections import defaultdict, Counter"
+  - "typing"
+
+template: |
+  from collections import defaultdict, Counter
+  from typing import List, Dict
+
+  {% if class_to_show == 'defaultdict' %}
+  # --- Demonstrate defaultdict for grouping items ---
+  print("--- Using defaultdict to group items by a key ---")
+  
+  {{ data_var_name }}: List[tuple[str, str]] = [
+      ('FRUIT', 'Apple'),
+      ('VEGETABLE', 'Carrot'),
+      ('FRUIT', 'Orange'),
+      ('VEGETABLE', 'Broccoli'),
+      ('FRUIT', 'Banana')
+  ]
+
+  # Traditional method with a standard dict
+  grouped_items_loop = {}
+  for category, item in {{ data_var_name }}:
+      if category not in grouped_items_loop:
+          grouped_items_loop[category] = []
+      grouped_items_loop[category].append(item)
+  
+  # Pythonic method with defaultdict
+  # The `list` factory is called to create a new list for any key accessed for the first time.
+  grouped_items_dd = defaultdict(list)
+  for category, item in {{ data_var_name }}:
+      grouped_items_dd[category].append(item)
+
+  print(f"Traditional dict: {dict(grouped_items_loop)}")
+  print(f"defaultdict:      {dict(grouped_items_dd)}")
+  assert dict(grouped_items_loop) == dict(grouped_items_dd)
+  print("\\n✅ Results are identical. `defaultdict` avoids the explicit key check.")
+
+  {% elif class_to_show == 'Counter' %}
+  # --- Demonstrate Counter for frequency counting ---
+  print("--- Using Counter for frequency counting ---")
+  
+  {{ data_var_name }}: List[str] = ['apple', 'red', 'apple', 'blue', 'red', 'apple', 'green']
+
+  # Traditional method with a standard dict
+  counts_loop = {}
+  for item in {{ data_var_name }}:
+      counts_loop[item] = counts_loop.get(item, 0) + 1
+      
+  # Pythonic method with Counter
+  counts_counter = Counter({{ data_var_name }})
+
+  print(f"Traditional dict: {counts_loop}")
+  print(f"Counter:          {dict(counts_counter)}")
+  assert counts_loop == dict(counts_counter)
+  print("\\n✅ Results are identical. `Counter` provides a more direct and efficient solution.")
+  
+  # Counter also provides useful methods like most_common
+  print("\\n--- Counter's most_common() method ---")
+  most_common_items = counts_counter.most_common(2)
+  print(f"The 2 most common items are: {most_common_items}")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      {% if class_to_show == 'defaultdict' %}
+      assert 'grouped_items_dd' in locals()
+      assert isinstance(grouped_items_dd, defaultdict)
+      assert grouped_items_dd['FRUIT'] == ['Apple', 'Orange', 'Banana']
+      assert grouped_items_dd['VEGETABLE'] == ['Carrot', 'Broccoli']
+      print("defaultdict validation passed.")
+      {% elif class_to_show == 'Counter' %}
+      assert 'counts_counter' in locals()
+      assert isinstance(counts_counter, Counter)
+      assert counts_counter['apple'] == 3
+      assert counts_counter['red'] == 2
+      assert most_common_items == [('apple', 3), ('red', 2)]
+      print("Counter validation passed.")
+      {% endif %}
