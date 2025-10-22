@@ -1,0 +1,98 @@
+plse_version: "2.0"
+pattern_id: "python.core.list_tuple_basics"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the fundamental operations for Python's primary sequence types:
+    lists (mutable) and tuples (immutable). This pattern covers creation,
+    indexing, negative indexing, slicing, and tuple unpacking.
+  tags: [python, core-language, list, tuple, sequence, slicing, indexing, best-practice]
+  pedagogy:
+    concept: "List and Tuple Fundamentals"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that demonstrates basic operations on a `{{ sequence_type }}`. The script should show how to access the first and last elements, and how to extract a slice from the middle of the sequence."
+
+parameters:
+  sequence_type:
+    type: "choice"
+    description: "The type of sequence to demonstrate."
+    default: "list"
+    constraints:
+      options: ["list", "tuple"]
+  var_name:
+    type: "choice"
+    description: "The variable name for the sequence."
+    default: "data"
+    constraints:
+      options: ["data", "my_sequence", "items"]
+
+requires: []
+
+template: |
+  # --- 1. Define a sequence ---
+  {% if sequence_type == 'list' %}
+  # A list is a mutable, ordered sequence of elements.
+  {{ var_name }} = [10, 20, 30, 40, 50, 60]
+  {% elif sequence_type == 'tuple' %}
+  # A tuple is an immutable, ordered sequence of elements.
+  {{ var_name }} = (10, 20, 30, 40, 50, 60)
+  {% endif %}
+  print(f"Original {{ sequence_type }}: { {{ var_name }} }")
+
+  # --- 2. Indexing: Accessing single elements ---
+  print("\\n--- Indexing ---")
+  first_element = {{ var_name }}[0]
+  print(f"First element (index 0): {first_element}")
+
+  # Negative indexing counts from the end of the sequence.
+  last_element = {{ var_name }}[-1]
+  print(f"Last element (index -1): {last_element}")
+
+  # --- 3. Slicing: Extracting a subsequence ---
+  print("\\n--- Slicing ---")
+  # Slice from index 2 up to (but not including) index 5.
+  middle_slice = {{ var_name }}[2:5]
+  print(f"Slice from index 2 to 5: {middle_slice}")
+
+  # --- 4. Mutability Demonstration ---
+  {% if sequence_type == 'list' %}
+  print("\\n--- Mutability: Modifying a list ---")
+  # Lists are mutable, so we can change them in-place.
+  {{ var_name }}.append(70)
+  print(f"After appending 70: { {{ var_name }} }")
+  {{ var_name }}[0] = 99
+  print(f"After changing index 0 to 99: { {{ var_name }} }")
+  {% elif sequence_type == 'tuple' %}
+  print("\\n--- Immutability: Tuples cannot be changed ---")
+  # Tuples are immutable. The following lines would raise a TypeError if uncommented:
+  # {{ var_name }}.append(70)  # AttributeError
+  # {{ var_name }}[0] = 99      # TypeError
+  print("Tuples cannot be modified in-place.")
+
+  # --- 5. Tuple Unpacking ---
+  print("\\n--- Tuple Unpacking ---")
+  a, b, c, _, _, _ = {{ var_name }}
+  print(f"Unpacked first three elements: a={a}, b={b}, c={c}")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Validate the indexing and slicing results
+      assert first_element == 10
+      assert last_element == 60
+      
+      {% if sequence_type == 'list' %}
+      assert middle_slice == [30, 40, 50]
+      # Validate the mutations
+      assert {{ var_name }} == [99, 20, 30, 40, 50, 60, 70]
+      print("List operations validation passed.")
+      {% elif sequence_type == 'tuple' %}
+      assert middle_slice == (30, 40, 50)
+      # Validate the unpacking
+      assert a == 10 and b == 20 and c == 30
+      print("Tuple operations validation passed.")
+      {% endif %}
