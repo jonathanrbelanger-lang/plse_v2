@@ -1,0 +1,88 @@
+plse_version: "2.0"
+pattern_id: "python.anti_pattern.non_pythonic_loop"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the common anti-pattern of using `range(len(sequence))` to loop
+    over a collection in Python. This paired pattern contrasts the verbose, C-style
+    loop with the clean, readable, and idiomatic Python approach using `enumerate`
+    to get both the index and the value.
+  tags: [python, core-language, anti-pattern, idiomatic, readability, for-loop, enumerate]
+  pedagogy:
+    concept: "Idiomatic Iteration with `enumerate`"
+    difficulty: "beginner"
+
+instruction: "{% if is_anti_pattern %}The following code uses a C-style `for i in range(len(...))` loop, which is not idiomatic in Python. Refactor it to use the more Pythonic `enumerate` function.{% else %}Write an idiomatic Python script that iterates over a list, printing both the index and the value of each item using the `enumerate` function.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  iterable_var:
+    type: "choice"
+    description: "The variable name for the list to iterate over."
+    default: "my_list"
+    constraints:
+      options: ["my_list", "data", "items"]
+
+requires: []
+
+template: |
+  # --- 1. Setup: Create a sample list ---
+  {{ iterable_var }} = ['a', 'b', 'c', 'd']
+  print(f"Iterating over: { {{ iterable_var }} }")
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: C-style loop using range(len()) ---
+  print("\\n--- Non-Pythonic Loop (range(len())) ---")
+  
+  # This is less readable and requires an extra line to access the item.
+  # It's a common pattern for developers coming from languages like C or Java.
+  output_from_loop = []
+  for i in range(len({{ iterable_var }})):
+      item = {{ iterable_var }}[i]
+      line = f"Index: {i}, Item: '{item}'"
+      print(line)
+      output_from_loop.append(line)
+
+  {% else %}
+  # --- CORRECT PATTERN: Pythonic loop using enumerate() ---
+  print("\\n--- Pythonic Loop (enumerate()) ---")
+  
+  # `enumerate` is the idiomatic way to get both the index and the item
+  # during iteration. It is cleaner, more readable, and avoids manual index management.
+  output_from_enumerate = []
+  for index, item in enumerate({{ iterable_var }}):
+      line = f"Index: {index}, Item: '{item}'"
+      print(line)
+      output_from_enumerate.append(line)
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that both methods produce the same logical output,
+      # proving that `enumerate` is a direct and superior replacement.
+      
+      {% if is_anti_pattern %}
+      assert 'output_from_loop' in locals(), "`output_from_loop` was not created."
+      assert len(output_from_loop) == 4
+      assert output_from_loop[2] == "Index: 2, Item: 'c'"
+      print("Non-Pythonic loop anti-pattern validated.")
+      {% else %}
+      assert 'output_from_enumerate' in locals(), "`output_from_enumerate` was not created."
+      assert len(output_from_enumerate) == 4
+      assert output_from_enumerate[2] == "Index: 2, Item: 'c'"
+      
+      # We can also create the expected output from the anti-pattern to compare
+      expected_output = []
+      for i in range(len({{ iterable_var }})):
+          item = {{ iterable_var }}[i]
+          expected_output.append(f"Index: {i}, Item: '{item}'")
+      
+      assert output_from_enumerate == expected_output
+      print("Idiomatic `enumerate` loop pattern validated.")
+      {% endif %}
