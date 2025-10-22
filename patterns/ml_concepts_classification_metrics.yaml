@@ -1,0 +1,116 @@
+plse_version: "2.0"
+pattern_id: "ml_concepts.classification_metrics"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates how to evaluate the performance of a classification model using
+    standard metrics from scikit-learn. This pattern covers the generation of a
+    `classification_report` (precision, recall, F1-score) and the visualization
+    of a `confusion_matrix` using seaborn's heatmap.
+  tags: [ml, scikit-learn, metrics, classification, reporting, confusion-matrix, best-practice]
+  pedagogy:
+    concept: "Classification Model Evaluation"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that uses scikit-learn to evaluate a set of model predictions. The script should generate a `classification_report` and use `seaborn.heatmap` to plot a `confusion_matrix` from the provided true and predicted labels."
+
+parameters:
+  num_classes:
+    type: "choice"
+    description: "The number of classes in the classification problem."
+    default: 3
+    constraints:
+      options: [3, 5]
+  y_true_var:
+    type: "choice"
+    description: "The variable name for the ground truth labels."
+    default: "y_true"
+    constraints:
+      options: ["y_true", "ground_truth_labels"]
+  y_pred_var:
+    type: "choice"
+    description: "The variable name for the model's predicted labels."
+    default: "y_pred"
+    constraints:
+      options: ["y_pred", "model_predictions"]
+
+requires:
+  - "numpy as np"
+  - "seaborn as sns"
+  - "matplotlib.pyplot as plt"
+  - "from sklearn.metrics import classification_report, confusion_matrix"
+  - "os"
+
+template: |
+  import numpy as np
+  import seaborn as sns
+  import matplotlib.pyplot as plt
+  from sklearn.metrics import classification_report, confusion_matrix
+  import os
+
+  # --- 1. Simulate model outputs ---
+  # In a real scenario, these would come from a trained model.
+  NUM_CLASSES = {{ num_classes }}
+  {{ y_true_var }} = np.random.randint(0, NUM_CLASSES, size=100)
+  # Simulate a model that is mostly correct but makes some mistakes
+  {{ y_pred_var }} = {{ y_true_var }}.copy()
+  for i in range(15): # Introduce 15 errors
+      idx = np.random.randint(0, 100)
+      {{ y_pred_var }}[idx] = ({{ y_pred_var }}[idx] + 1) % NUM_CLASSES
+
+  class_names = [f"Class_{i}" for i in range(NUM_CLASSES)]
+
+  # --- 2. Generate the Classification Report ---
+  print("--- Classification Report ---")
+  # This report provides precision, recall, F1-score, and support for each class.
+  report = classification_report({{ y_true_var }}, {{ y_pred_var }}, target_names=class_names)
+  print(report)
+
+  # --- 3. Compute and Visualize the Confusion Matrix ---
+  print("\\n--- Confusion Matrix ---")
+  # The confusion matrix shows which classes are being confused with others.
+  cm = confusion_matrix({{ y_true_var }}, {{ y_pred_var }})
+  
+  plt.figure(figsize=(8, 6))
+  heatmap = sns.heatmap(
+      cm,
+      annot=True, # Show the counts in each cell
+      fmt='d',    # Format as integer
+      cmap='Blues',
+      xticklabels=class_names,
+      yticklabels=class_names
+  )
+  plt.xlabel("Predicted Label", fontsize=12)
+  plt.ylabel("True Label", fontsize=12)
+  plt.title("Confusion Matrix", fontsize=14, weight='bold')
+  
+  # Save the plot
+  plot_filename = "confusion_matrix.png"
+  plt.savefig(plot_filename)
+  print(f"Confusion matrix plot saved to '{plot_filename}'")
+  # plt.show()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the outputs of the metrics functions
+      assert 'report' in locals(), "`classification_report` was not generated."
+      assert isinstance(report, str)
+      assert "precision" in report and "recall" in report and "f1-score" in report
+      
+      assert 'cm' in locals(), "`confusion_matrix` was not generated."
+      assert isinstance(cm, np.ndarray)
+      assert cm.shape == (NUM_CLASSES, NUM_CLASSES)
+      
+      # The diagonal of the confusion matrix represents correct predictions.
+      # The sum of the whole matrix should be the total number of samples.
+      assert cm.sum() == 100
+      
+      assert os.path.exists("confusion_matrix.png"), "Confusion matrix plot was not saved."
+      
+      print("Classification metrics validation passed.")
+      
+      # Clean up the generated plot file
+      os.remove("confusion_matrix.png")
