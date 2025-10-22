@@ -1,0 +1,109 @@
+plse_version: "2.0"
+pattern_id: "python.analysis.hypothesis_testing"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates how to perform a statistical analysis of experimental results.
+    This pattern calculates a summary metric (Area Under Curve) from raw data
+    and then uses a hypothesis test (e.g., Mann-Whitney U) from SciPy to
+    determine if the observed differences between groups are statistically significant.
+  tags: [python, scipy, numpy, pandas, statistics, hypothesis-testing, reporting]
+  pedagogy:
+    concept: "Hypothesis Testing for Experiment Results"
+    difficulty: "advanced"
+
+instruction: "Write a Python script that takes a pandas DataFrame of results, calculates the Area Under the Curve (AUC) for the '{{ metric_col }}' for each experimental run, and then performs a one-sided {{ test_name }} to test if the '{{ group_a }}' group is significantly greater than the '{{ group_b }}' group."
+
+parameters:
+  test_name:
+    type: "choice"
+    description: "The statistical test to perform."
+    default: "mannwhitneyu"
+    constraints:
+      options: ["mannwhitneyu", "ttest_ind"]
+  group_a:
+    type: "choice"
+    description: "The name of the first group for comparison."
+    default: "Model_A"
+    constraints:
+      options: ["Model_A", "Treatment", "HTL"]
+  group_b:
+    type: "choice"
+    description: "The name of the second group for comparison (the baseline)."
+    default: "Model_B"
+    constraints:
+      options: ["Model_B", "Control", "Dense"]
+  metric_col:
+    type: "string"
+    description: "The name of the performance metric column."
+    default: "accuracy"
+  x_col:
+    type: "string"
+    description: "The name of the column for the x-axis of the curve."
+    default: "noise_level"
+
+requires:
+  - "pandas as pd"
+  - "numpy as np"
+  - "from scipy import stats"
+
+template: |
+  # --- 1. Create Sample Data ---
+  # This DataFrame simulates results from multiple runs (seeds) for two models.
+  data = {
+      "model": ["{{ group_a }}"]*6 + ["{{ group_b }}"]*6,
+      "seed": [1,1,2,2,3,3] * 2,
+      "{{ x_col }}": [0.0, 0.5, 0.0, 0.5, 0.0, 0.5] * 2,
+      "{{ metric_col }}": [0.95, 0.8, 0.94, 0.81, 0.96, 0.79] + [0.90, 0.6, 0.89, 0.62, 0.91, 0.61]
+  }
+  results_df = pd.DataFrame(data)
+
+  # --- 2. Calculate Summary Metric (Area Under Curve) ---
+  auc_results = []
+  for group in results_df.groupby(['model', 'seed']):
+      model_name, seed = group[0]
+      run_data = group[1].sort_values(by="{{ x_col }}")
+      
+      # Use numpy's trapezoidal rule to calculate the area under the performance curve
+      auc = np.trapz(y=run_data["{{ metric_col }}"], x=run_data["{{ x_col }}"])
+      auc_results.append({"model": model_name, "auc": auc})
+
+  auc_df = pd.DataFrame(auc_results)
+  print("--- Calculated AUC per run ---")
+  print(auc_df)
+
+  # --- 3. Perform Hypothesis Test ---
+  group_a_scores = auc_df[auc_df['model'] == '{{ group_a }}']['auc']
+  group_b_scores = auc_df[auc_df['model'] == '{{ group_b }}']['auc']
+  
+  alpha = 0.05
+  print(f"\\n--- Performing one-sided {{ test_name }} (alpha={alpha}) ---")
+  print(f"H0: AUC('{{ group_a }}') <= AUC('{{ group_b }}')")
+  print(f"H1: AUC('{{ group_a }}') > AUC('{{ group_b }}')")
+
+  {% if test_name == 'mannwhitneyu' %}
+  # Mann-Whitney U test: Non-parametric, does not assume normal distribution.
+  stat, p_value = stats.mannwhitneyu(group_a_scores, group_b_scores, alternative='greater')
+  {% elif test_name == 'ttest_ind' %}
+  # Independent T-test: Parametric, assumes data is normally distributed.
+  stat, p_value = stats.ttest_ind(group_a_scores, group_b_scores, alternative='greater')
+  {% endif %}
+
+  # --- 4. Report Conclusion ---
+  print(f"Statistic: {stat:.4f}, P-value: {p_value:.4f}")
+  if p_value < alpha:
+      print("✅ Conclusion: The result is statistically significant. We reject the null hypothesis.")
+      print(f"   The performance of '{{ group_a }}' is significantly greater than '{{ group_b }}'.")
+  else:
+      print("❌ Conclusion: The result is not statistically significant. We fail to reject the null hypothesis.")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test that the script runs and produces the expected variables
+      assert 'p_value' in locals(), "p_value was not calculated."
+      assert isinstance(p_value, float), "p_value is not a float."
+      assert 0.0 <= p_value <= 1.0, "p_value is outside the valid range [0, 1]."
+      print("Hypothesis testing script validation passed.")```
