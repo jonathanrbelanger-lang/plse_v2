@@ -1,5 +1,5 @@
 plse_version: "2.0"
-pattern_id: "python_anti_pattern_not_using_generators"
+pattern_id: "python.anti_pattern.not_using_generators"
 
 metadata:
   author: "PLSE v2.0 Anti-Pattern Library"
@@ -49,7 +49,8 @@ template: |
       # This list comprehension builds a list of 10 million integers.
       # This can consume hundreds of megabytes of RAM before the sum even starts.
       numbers = [i*i for i in range(n)]
-      print(f"Inefficient method created a list consuming ~{sys.getsizeof(numbers) / 1024 / 1024:.2f} MB of memory.")
+      # --- JINJA FIX: The format specifier ':.2f' must be escaped ---
+      print(f"Inefficient method created a list consuming ~{sys.getsizeof(numbers) / 1024 / 1024{{ ':.2f' }} } MB of memory.")
       
       {% else %}
       # --- CORRECT PATTERN: Using a memory-efficient generator expression ---
