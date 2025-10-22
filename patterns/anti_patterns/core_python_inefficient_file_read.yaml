@@ -1,0 +1,121 @@
+plse_version: "2.0"
+pattern_id: "python.anti_pattern.inefficient_file_read"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the dangerous performance anti-pattern of loading an entire file
+    into memory at once using `.read()` or `.readlines()`. This paired pattern
+    contrasts the memory-intensive approach with the robust, memory-efficient,
+    and idiomatic Python approach of iterating directly over the file object.
+  tags: [python, core-language, anti-pattern, performance, memory, file-io, best-practice]
+  pedagogy:
+    concept: "Memory-Efficient File Processing"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following script reads a file in a way that is not scalable and can cause `MemoryError` with large files. Explain the risk and refactor it to process the file line-by-line.{% else %}Write a memory-efficient Python script that processes a text file line-by-line by iterating directly over the file object within a `with` statement.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  filename_var:
+    type: "choice"
+    description: "The variable name for the filename."
+    default: "filename"
+    constraints:
+      options: ["filename", "log_file_path", "data_file"]
+
+requires:
+  - "os"
+
+template: |
+  import os
+
+  # --- 1. Setup: Create a dummy text file for the demonstration ---
+  {{ filename_var }} = "sample_log.txt"
+  file_content = [
+      "INFO: System starting up\\n",
+      "WARNING: Disk space is low\\n",
+      "INFO: Processing user request\\n",
+      "ERROR: Connection to database failed\\n"
+  ]
+  with open({{ filename_var }}, "w") as f:
+      f.writelines(file_content)
+
+  print(f"--- Processing file: '{ {{ filename_var }} }' ---")
+  
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Reading the entire file into memory ---
+  print("\\n--- Inefficient method: .readlines() ---")
+  
+  # This is dangerous for large files. If the file is 10GB, this line
+  # will attempt to allocate 10GB of RAM, likely crashing the program.
+  try:
+      with open({{ filename_var }}, "r") as f:
+          all_lines = f.readlines()
+      
+      line_count = 0
+      for line in all_lines:
+          if "ERROR" in line:
+              print(f"Found error: {line.strip()}")
+          line_count += 1
+      
+      print(f"ANALYSIS: Processed {line_count} lines after loading the entire file into memory.")
+  except MemoryError:
+      print("ANALYSIS: A MemoryError would occur here if the file were too large.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Iterating directly over the file object ---
+  print("\\n--- Memory-efficient method: iterating over the file object ---")
+  
+  # This is the idiomatic and scalable way to read a file.
+  # The file object is an iterator, which reads the file line-by-line,
+  # keeping only one line in memory at a time.
+  try:
+      line_count = 0
+      with open({{ filename_var }}, "r") as f:
+          for line in f:
+              if "ERROR" in line:
+                  print(f"Found error: {line.strip()}")
+              line_count += 1
+      
+      print(f"ANALYSIS: Processed {line_count} lines without loading the whole file into memory.")
+  except IOError as e:
+      print(f"An error occurred: {e}")
+  {% endif %}
+
+  # --- 2. Cleanup ---
+  os.remove({{ filename_var }})
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that both methods achieve the same logical result,
+      # proving the iterative method is a correct replacement.
+      
+      # Re-create the dummy file for the test
+      test_filename = "test_file.txt"
+      test_content = ["line 1\\n", "line 2\\n"]
+      with open(test_filename, "w") as f:
+          f.writelines(test_content)
+      
+      {% if is_anti_pattern %}
+      with open(test_filename, "r") as f:
+          lines = f.readlines()
+      count = len(lines)
+      {% else %}
+      count = 0
+      with open(test_filename, "r") as f:
+          for line in f:
+              count += 1
+      {% endif %}
+      
+      assert count == 2, "The script did not process the correct number of lines."
+      
+      print("File reading pattern validation passed.")
+      
+      # Clean up
+      os.remove(test_filename)
