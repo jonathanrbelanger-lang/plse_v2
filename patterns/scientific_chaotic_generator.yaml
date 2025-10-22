@@ -1,0 +1,121 @@
+plse_version: "2.0"
+pattern_id: "python.scientific.chaotic_system_generator"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from DefTrinHTLCompr.ipynb)"
+  description: |
+    Demonstrates the implementation of a chaotic dynamical system, the Hénon map,
+    to generate a complex, high-entropy time series. This pattern teaches how to
+    derive system parameters from a secret key for deterministic reproducibility
+    and the scientific practice of discarding initial transient steps.
+  tags: [python, scientific-computing, chaos-theory, numpy, hashlib, simulation]
+  pedagogy:
+    concept: "Simulating Chaotic Dynamical Systems"
+    difficulty: "advanced"
+
+instruction: "Create a Python class named `{{ class_name }}` to generate a chaotic time series using the Hénon map. The class must be initialized with a secret key, which is used via `hashlib.sha256` to derive the map's parameters `a` and `b`. The `generate` method should discard `{{ transient_steps }}` initial steps before producing the final series."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the chaotic generator class."
+    default: "HenonMapGenerator"
+    constraints:
+      options: ["HenonMapGenerator", "ChaoticSignalGenerator", "HenonAttractor"]
+  n_points:
+    type: "choice"
+    description: "The number of points in the final generated time series."
+    default: 1024
+    constraints:
+      options: [1024, 2048, 4096]
+  transient_steps:
+    type: "choice"
+    description: "Number of initial iterations to discard to let the system settle."
+    default: 1000
+    constraints:
+      options: [500, 1000, 2000]
+
+requires:
+  - "numpy as np"
+  - "hashlib"
+  - "secrets"
+
+template: |
+  class {{ class_name }}:
+      """
+      Generates a deterministic, high-entropy signal from the Hénon map,
+      a classic chaotic dynamical system.
+      """
+      def __init__(self, secret_key: bytes):
+          """
+          Initializes the generator and derives its parameters from a secret key.
+          """
+          self.key = secret_key
+          # Use a cryptographic hash for a robust, deterministic derivation
+          h = hashlib.sha256(self.key).digest()
+          
+          # Unpack hash bytes into integers
+          h_a = int.from_bytes(h[0:8], 'big')
+          h_b = int.from_bytes(h[8:16], 'big')
+          h_x0 = int.from_bytes(h[16:24], 'big')
+          
+          # Scale parameters to a known chaotic region of the Hénon map
+          self.a = 1.39 + (h_a / 2**64) * 0.02  # Range [1.39, 1.41]
+          self.b = 0.29 + (h_b / 2**64) * 0.02  # Range [0.29, 0.31]
+          self.x0 = -0.5 + (h_x0 / 2**64)       # Range [-0.5, 0.5]
+          self.y0 = 0.0 # y0 can be fixed for simplicity
+
+      def generate(self, n_points: int, transient_steps: int = {{ transient_steps }}) -> np.ndarray:
+          """
+          Generates the chaotic time series.
+
+          Args:
+              n_points: The number of data points in the final series.
+              transient_steps: The number of initial iterations to discard.
+          
+          Returns:
+              A NumPy array containing the time series.
+          """
+          x, y = self.x0, self.y0
+
+          # Discard initial transient steps to ensure the output is on the attractor
+          for _ in range(transient_steps):
+              x_new = 1 - self.a * x**2 + y
+              y_new = self.b * x
+              x, y = x_new, y_new
+
+          # Generate the actual data points for the time series
+          points = np.zeros(n_points, dtype=np.float64)
+          for i in range(n_points):
+              x_new = 1 - self.a * x**2 + y
+              y_new = self.b * x
+              x, y = x_new, y_new
+              points[i] = x  # The x-component is used as the signal
+              
+          return points
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test for determinism and key-dependence
+      KEY_1 = b'a_fixed_secret_key_for_testing'
+      KEY_2 = b'a_different_secret_key_for_testing'
+      
+      # 1. Generate two series with the same key
+      generator1 = {{ class_name }}(secret_key=KEY_1)
+      series1 = generator1.generate(n_points={{ n_points }})
+      
+      generator2 = {{ class_name }}(secret_key=KEY_1)
+      series2 = generator2.generate(n_points={{ n_points }})
+      
+      # 2. Generate a third series with a different key
+      generator3 = {{ class_name }}(secret_key=KEY_2)
+      series3 = generator3.generate(n_points={{ n_points }})
+      
+      # 3. Assertions
+      assert series1.shape == ({{ n_points }},), "Output series has incorrect shape."
+      assert np.array_equal(series1, series2), "Generator is not deterministic for the same key."
+      assert not np.array_equal(series1, series3), "Generator produces the same output for different keys."
+      
+      print("Chaotic generator validation passed: deterministic and key-dependent.")
