@@ -1,0 +1,120 @@
+plse_version: "2.0"
+pattern_id: "python.core.defining_functions"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the fundamental concept of defining and calling functions in Python.
+    This pattern covers function parameters, return values, default arguments,
+    type hints, and docstrings, which are the essential components of a well-defined,
+    reusable function.
+  tags: [python, core-language, functions, best-practice, type-hints, docstrings]
+  pedagogy:
+    concept: "Function Definition and Usage"
+    difficulty: "beginner"
+
+instruction: "Write a Python function named `{{ func_name }}` that accepts two numbers, a string `operation`, and an optional boolean `as_float`. The function should perform the specified arithmetic operation and return the result, using type hints and a clear docstring."
+
+parameters:
+  func_name:
+    type: "choice"
+    description: "The name of the main function."
+    default: "calculate"
+    constraints:
+      options: ["calculate", "compute", "perform_operation"]
+  param_a:
+    type: "choice"
+    description: "The variable name for the first number."
+    default: "a"
+    constraints:
+      options: ["a", "x", "operand1"]
+  param_b:
+    type: "choice"
+    description: "The variable name for the second number."
+    default: "b"
+    constraints:
+      options: ["b", "y", "operand2"]
+
+requires:
+  - "typing"
+
+template: |
+  from typing import Union
+
+  def {{ func_name }}(
+      {{ param_a }}: Union[int, float],
+      {{ param_b }}: Union[int, float],
+      operation: str = "add",
+      as_float: bool = False
+  ) -> Union[int, float]:
+      """
+      Performs a basic arithmetic operation on two numbers.
+
+      Args:
+          {{ param_a }}: The first number.
+          {{ param_b }}: The second number.
+          operation: The operation to perform ('add', 'subtract', 'multiply').
+                     Defaults to 'add'.
+          as_float: If True, the result is always returned as a float.
+                    Defaults to False.
+
+      Returns:
+          The result of the arithmetic operation.
+      
+      Raises:
+          ValueError: If an unsupported operation is requested.
+      """
+      result = 0
+      if operation == "add":
+          result = {{ param_a }} + {{ param_b }}
+      elif operation == "subtract":
+          result = {{ param_a }} - {{ param_b }}
+      elif operation == "multiply":
+          result = {{ param_a }} * {{ param_b }}
+      else:
+          raise ValueError(f"Unsupported operation: '{operation}'")
+      
+      if as_float:
+          return float(result)
+      return result
+
+  # --- Example Usage ---
+  if __name__ == "__main__":
+      # Call with positional arguments
+      res_add = {{ func_name }}(10, 5)
+      print(f"10 + 5 = {res_add}")
+
+      # Call with keyword arguments and a different operation
+      res_multiply = {{ func_name }}({{ param_a }}=10, {{ param_b }}=5, operation="multiply")
+      print(f"10 * 5 = {res_multiply}")
+
+      # Call with the optional boolean flag
+      res_float = {{ func_name }}(10, 5, as_float=True)
+      print(f"10 + 5 (as float) = {res_float}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the function's logic
+      assert {{ func_name }}(5, 3, "add") == 8
+      assert {{ func_name }}(5, 3, "subtract") == 2
+      assert {{ func_name }}(5, 3, "multiply") == 15
+      
+      # Test the default argument
+      assert {{ func_name }}(5, 3) == 8
+      
+      # Test the as_float argument
+      assert isinstance({{ func_name }}(5, 3, as_float=True), float)
+      assert isinstance({{ func_name }}(5, 3, as_float=False), int)
+      
+      # Test the error handling
+      try:
+          {{ func_name }}(5, 3, "divide")
+          # If this line is reached, the test fails because no exception was raised
+          assert False, "ValueError was not raised for an invalid operation."
+      except ValueError:
+          # This is the expected outcome
+          pass
+          
+      print("Function definition pattern validation passed.")
