@@ -4,72 +4,52 @@ Defines the PLSEGenerator, the core engine for synthesizing code using Jinja2.
 
 import random
 import hashlib
-import autopep8
 from typing import Optional, Tuple, Dict, Any, List
 from jinja2 import Environment, TemplateSyntaxError
 
-# Import our new, schema-aligned pattern definition
-from .patterns import PLSEPattern, Validation
+from .patterns import PLSEPattern
 
 class PLSEGenerator:
     """
     Generates Python code by rendering a PLSEPattern with a dynamically
     instantiated parameter context using the Jinja2 templating engine.
     """
-
     def __init__(self):
         self.generated_hashes: set[str] = set()
-        self.jinja_env = Environment(
-            trim_blocks=True, lstrip_blocks=True
-        )
+        self.jinja_env = Environment(trim_blocks=True, lstrip_blocks=True)
 
     def _instantiate_parameters(self, pattern: PLSEPattern) -> Dict[str, Any]:
-        """
-        Generates a concrete set of values from the pattern's parameter schema.
-        """
         context = {}
         for name, param in pattern.parameters.items():
             if param.type == "choice":
-                context[name] = random.choice(param.constraints.get("options", [param.default]))
-            # Future parameter types (e.g., "int", "float") would be handled here.
+                options = param.constraints.get("options", [param.default]) if param.constraints else [param.default]
+                context[name] = random.choice(options)
             else:
                 context[name] = param.default
         return context
 
+    def _render_component(self, template_str: Optional[str], context: Dict[str, Any]) -> str:
+        """Safely renders a single Jinja2 template string, handling None."""
+        if not template_str:
+            return ""
+        template = self.jinja_env.from_string(template_str)
+        return template.render(context)
+
     def generate(self, pattern: PLSEPattern) -> Optional[Tuple[str, str, List[str]]]:
-        """
-        Generates a single, unique code example from a given pattern.
-
-        Args:
-            pattern: The PLSEPattern to render.
-
-        Returns:
-            A tuple containing:
-            - The final, assembled code string.
-            - The rendered instruction string.
-            - A list of rendered unit test snippet strings.
-            Returns None if generation fails.
-        """
-        # 1. Create a concrete set of parameters for this instance.
         parameter_context = self._instantiate_parameters(pattern)
 
         try:
-            # 2. Render all components using the Jinja2 engine.
+            rendered_instruction = self._render_component(pattern.instruction, parameter_context)
             
-            # Render the instruction
-            instruction_template = self.jinja_env.from_string(pattern.instruction)
-            rendered_instruction = instruction_template.render(parameter_context)
-
-            # Render each architectural code component
             components = pattern.components
-            rendered_imports = self.jinja_env.from_string(components.imports).render(parameter_context)
-            rendered_model_def = self.jinja_env.from_string(components.model_definition).render(parameter_context)
-            rendered_training_loop = self.jinja_env.from_string(components.training_loop).render(parameter_context)
-            rendered_evaluation = self.jinja_env.from_string(components.evaluation).render(parameter_context)
+            rendered_imports = self._render_component(components.imports, parameter_context)
+            rendered_data_setup = self._render_component(components.data_setup, parameter_context)
+            rendered_model_def = self._render_component(components.model_definition, parameter_context)
+            rendered_training_loop = self._render_component(components.training_loop, parameter_context)
+            rendered_evaluation = self._render_component(components.evaluation, parameter_context)
 
-            # Render the validation snippets
             rendered_tests = [
-                self.jinja_env.from_string(test).render(parameter_context)
+                self._render_component(test, parameter_context)
                 for test in pattern.validation.unit_test_snippets
             ]
 
@@ -77,24 +57,22 @@ class PLSEGenerator:
             print(f"Jinja2 template error in pattern '{pattern.pattern_id}': {e}")
             return None
 
-        # 3. Assemble the final code string in a logical order.
-        full_code = "\n\n".join(filter(None, [
+        # Assemble the final code string, filtering out empty components.
+        code_parts = [
             rendered_imports,
+            rendered_data_setup,
             rendered_model_def,
             rendered_training_loop,
             rendered_evaluation
-        ])).strip()
+        ]
+        full_code = "\n\n".join(part for part in code_parts if part and not part.isspace())
 
-        # 4. Check for uniqueness.
+        # Check for uniqueness to avoid duplicates in the dataset
         code_hash = hashlib.md5(full_code.encode()).hexdigest()
         if code_hash in self.generated_hashes:
-            return None  # Duplicate
+            return None
         self.generated_hashes.add(code_hash)
 
-        # 5. Format the final code.
-        try:
-            formatted_code = autopep8.fix_code(full_code)
-        except (IndentationError, SyntaxError):
-            return None # Discard malformed code
-
-        return formatted_code, rendered_instruction, rendered_tests
+        # NOTE: autopep8 formatting is removed for now to simplify dependencies.
+        # It can be added back as a post-processing step.
+        return full_code, rendered_instruction, rendered_tests
