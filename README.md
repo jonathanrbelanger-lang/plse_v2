@@ -1,20 +1,3 @@
-Understood. The current README.md is good, but it's now out of date. It doesn't reflect the significant progress we've made, especially with the creation of the anti-pattern and orchestration libraries. It also lacks a crucial piece of developer experience: the pattern catalog we just created.
-
-A great README is the front door to a project. It needs to be clear, comprehensive, and empower a new user to get started quickly.
-
-Action: Update README.md
-
-Let's replace the entire content of your README.md file with this new, significantly improved version. This version is more detailed, better structured, and includes instructions for our new discovery script.
-
-README.md (Updated Version)
-
-code
-Markdown
-download
-content_copy
-expand_less
-# Python Latent Space Explorer (PLSE) v2.0
-
 PLSE v2.0 is a synthetic code generation engine designed to create a high-quality, instruction-tuned dataset for training code-intelligent Large Language Models (LLMs).
 
 This project moves beyond scraping public code repositories. Instead, it treats the training dataset as a first-class product, engineered from the ground up to be **pedagogical, architecturally sound, and diverse**. The goal is to train LLMs that don't just write code, but understand how to write *good* code.
