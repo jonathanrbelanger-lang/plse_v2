@@ -23,7 +23,8 @@ dependencies = [
     "pylint",        # For deep code analysis in validation
     "flake8",        # For style and linting in validation
     "mypy",          # For static type checking in validation
-    "jinja2"
+    "jinja2", 
+    "pydantic"
 ]
 
 [project.urls]
