@@ -1,0 +1,114 @@
+plse_version: "2.0"
+pattern_id: "python.anti_pattern.inefficient_membership_test"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the significant performance anti-pattern of using a list for
+    membership testing (`in` operator) on a large collection. This paired pattern
+    contrasts the slow, O(n) linear scan of a list with the highly efficient,
+    O(1) hash-based lookup of a set.
+  tags: [python, core-language, anti-pattern, performance, data-structures, set, list]
+  pedagogy:
+    concept: "Choosing the Right Data Structure for Membership Testing"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following script is slow because it performs membership tests on a large list. Explain why this is a performance anti-pattern and refactor it to use a more appropriate data structure.{% else %}Write an efficient Python script that performs a large number of membership tests. The script should use a `set` for O(1) lookups.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  collection_size:
+    type: "choice"
+    description: "The number of items in the collection to test against."
+    default: 100000
+    constraints:
+      options: [10000, 100000]
+  num_lookups:
+    type: "choice"
+    description: "The number of membership tests to perform."
+    default: 10000
+    constraints:
+      options: [1000, 10000]
+
+requires:
+  - "time"
+  - "random"
+
+template: |
+  import time
+  import random
+
+  # --- 1. Setup: Create a large collection of items to check against ---
+  COLLECTION_SIZE = {{ collection_size }}
+  NUM_LOOKUPS = {{ num_lookups }}
+
+  # Create a collection of even numbers
+  even_numbers = [i * 2 for i in range(COLLECTION_SIZE)]
+  
+  # Create a list of numbers to test for membership
+  numbers_to_check = [random.randint(0, COLLECTION_SIZE * 2) for _ in range(NUM_LOOKUPS)]
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Using a list for membership testing ---
+  lookup_collection = even_numbers
+  print(f"--- Performing {NUM_LOOKUPS} lookups in a list of {COLLECTION_SIZE} items (SLOW) ---")
+  
+  start_time = time.perf_counter()
+  
+  count = 0
+  for num in numbers_to_check:
+      # This is an O(n) operation. The interpreter has to scan the list
+      # from the beginning for each lookup.
+      if num in lookup_collection:
+          count += 1
+          
+  end_time = time.perf_counter()
+  duration = (end_time - start_time) * 1000 # milliseconds
+  
+  print(f"Found {count} members in {duration:.2f} ms.")
+  print("ANALYSIS: This is slow because each `in` check requires a linear scan of the list.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Using a set for membership testing ---
+  # Converting the list to a set is a one-time O(n) cost.
+  lookup_collection = set(even_numbers)
+  print(f"--- Performing {NUM_LOOKUPS} lookups in a set of {COLLECTION_SIZE} items (FAST) ---")
+  
+  start_time = time.perf_counter()
+  
+  count = 0
+  for num in numbers_to_check:
+      # This is an O(1) average time complexity operation.
+      # The set uses a hash table for near-instantaneous lookups.
+      if num in lookup_collection:
+          count += 1
+          
+  end_time = time.perf_counter()
+  duration = (end_time - start_time) * 1000 # milliseconds
+  
+  print(f"Found {count} members in {duration:.2f} ms.")
+  print("ANALYSIS: This is extremely fast because set lookups are O(1) on average.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The core logic is the same, so we can't test for correctness difference.
+      # The key is the performance, which is demonstrated by the script's output.
+      # We can validate that the script ran and produced the expected variables.
+      
+      assert 'count' in locals(), "`count` variable was not calculated."
+      assert 'duration' in locals(), "`duration` was not calculated."
+      assert isinstance(count, int)
+      assert isinstance(duration, float)
+      assert duration > 0
+      
+      {% if is_anti_pattern %}
+      print("Inefficient membership test anti-pattern validated.")
+      {% else %}
+      print("Efficient membership test pattern validated.")
+      {% endif %}
