@@ -1,0 +1,134 @@
+plse_version: "2.0"
+pattern_id: "mlops.setup.stratified_install"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates a robust, stratified dependency installation script. This pattern
+    first installs a special, hardware-dependent library (like PyTorch with a specific
+    CUDA version) from a custom index URL. Only after that succeeds does it proceed
+    to install the remaining pinned, general-purpose dependencies.
+  tags: [mlops, setup, reproducibility, pip, pytorch, best-practice]
+  pedagogy:
+    concept: "Stratified Dependency Installation"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that performs a two-stage dependency installation. The first stage must install `{{ primary_lib }}` from a specific index URL. The second stage should install a list of other pinned dependencies."
+
+parameters:
+  primary_lib:
+    type: "choice"
+    description: "The primary, hardware-dependent library to install first."
+    default: "torch"
+    constraints:
+      options: ["torch", "jax"]
+  primary_lib_version:
+    type: "string"
+    description: "The version of the primary library."
+    default: "2.3.0"
+  cuda_version:
+    type: "choice"
+    description: "The CUDA version for the primary library's index URL."
+    default: "cu121"
+    constraints:
+      options: ["cu121", "cu118"]
+
+requires:
+  - "sys"
+  - "subprocess"
+
+template: |
+  import sys
+  import subprocess
+  from typing import List, Dict
+
+  def run_install_stage(command: List[str], stage_name: str):
+      """Executes a pip install command and handles errors."""
+      print(f"--- STAGE: {stage_name} ---")
+      try:
+          # Use check_call to raise an exception if the command fails
+          subprocess.check_call(command)
+          print(f"✅ SUCCESS: Stage '{stage_name}' completed.")
+          return True
+      except subprocess.CalledProcessError:
+          print(f"❌ FATAL ERROR: Stage '{stage_name}' failed. Aborting.", file=sys.stderr)
+          return False
+      except FileNotFoundError:
+          print(f"❌ FATAL ERROR: '{command[0]}' not found. Is Python/pip in your PATH?", file=sys.stderr)
+          return False
+
+  def stratified_dependency_install():
+      """
+      Performs a robust, multi-stage installation of project dependencies.
+      """
+      # --- Stage 1: Install Hardware-Dependent Primary Library ---
+      # This is critical for libraries like PyTorch or JAX that have different
+      # builds for different hardware (e.g., CUDA versions).
+      {% if primary_lib == 'torch' %}
+      primary_lib_command = [
+          sys.executable, "-m", "pip", "install",
+          "torch=={{ primary_lib_version }}", "torchvision", "torchaudio",
+          "--index-url", "https://download.pytorch.org/whl/{{ cuda_version }}"
+      ]
+      {% elif primary_lib == 'jax' %}
+      primary_lib_command = [
+          sys.executable, "-m", "pip", "install",
+          "jax[cuda12_pip]==0.4.23",
+          "-f", "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+      ]
+      {% endif %}
+
+      if not run_install_stage(primary_lib_command, "Primary Library ({{ primary_lib }})"):
+          return
+
+      # --- Stage 2: Install Remaining Pinned Dependencies ---
+      # These are general libraries that don't have complex hardware dependencies.
+      remaining_deps: Dict[str, str] = {
+          "numpy": "1.26.4",
+          "scikit-learn": "1.4.2",
+          "pandas": "2.2.2",
+          "transformers": "4.40.2"
+      }
+      
+      deps_to_install = [f"{lib}=={version}" for lib, version in remaining_deps.items()]
+      remaining_deps_command = [sys.executable, "-m", "pip", "install", "--quiet"] + deps_to_install
+      
+      if not run_install_stage(remaining_deps_command, "Remaining Dependencies"):
+          return
+          
+      print("\\n🎉 All dependencies installed successfully.")
+
+  if __name__ == "__main__":
+      stratified_dependency_install()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This pattern's primary effect is on the environment, which is hard to test
+      # directly without actually running a slow installation.
+      # A good "unit test" in this case is to verify the logic of the script itself.
+      # We can use a mock to ensure the correct commands would be run.
+      
+      from unittest.mock import patch
+
+      # We use a patch to "spy" on the subprocess.check_call function
+      with patch('subprocess.check_call') as mock_check_call:
+          stratified_dependency_install()
+          
+          # Get all the calls made to our mock
+          all_calls = mock_check_call.call_args_list
+          
+          assert len(all_calls) == 2, "Expected two separate install stages."
+          
+          # Check the first call for the primary library
+          first_call_args = all_calls[0].args[0]
+          assert "install" in first_call_args
+          assert any("{{ primary_lib }}" in arg for arg in first_call_args), "Primary library not in first install stage."
+          
+          # Check the second call for the remaining libraries
+          second_call_args = all_calls[1].args[0]
+          assert "numpy==1.26.4" in second_call_args
+          assert "pandas==2.2.2" in second_call_args
+          
+          print("Stratified install script validation passed: Correct commands were generated.")
