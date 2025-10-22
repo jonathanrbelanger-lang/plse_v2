@@ -36,6 +36,12 @@ class PatternRegistry:
                         with open(file_path, 'r', encoding='utf-8') as f:
                             raw_data = yaml.safe_load(f)
                         
+                        # --- ROBUSTNESS FIX ---
+                        # If the file is empty or only contains comments, raw_data will be None.
+                        if not isinstance(raw_data, dict):
+                            print(f"  - ⚠️ SKIPPED: File '{os.path.basename(file_path)}' is empty or not a valid YAML mapping.")
+                            continue
+
                         validated_schema = PLSEPatternSchema(**raw_data)
                         pattern = PLSEPattern.from_schema(validated_schema)
                         
