@@ -1,0 +1,103 @@
+plse_version: "2.0"
+pattern_id: "pytorch.anti_pattern.missing_model_eval"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the critical anti-pattern of forgetting to call `model.eval()`
+    before running inference in PyTorch. This paired pattern shows how layers like
+    `nn.Dropout` behave differently during training and evaluation, and how failing
+    to switch modes leads to non-deterministic and incorrect results.
+  tags: [pytorch, anti-pattern, correctness, inference, evaluation, dropout]
+  pedagogy:
+    concept: "Setting Model Mode for Inference (`model.eval()`)"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following PyTorch inference code produces a different result every time it runs. Identify the bug related to the model's mode and fix it.{% else %}Write a robust PyTorch script for model inference that correctly sets the model to evaluation mode to ensure deterministic results.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  dropout_rate:
+    type: "choice"
+    description: "The dropout probability for the model's dropout layer."
+    default: 0.5
+    constraints:
+      options: [0.25, 0.5, 0.75]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+
+template: |
+  import torch
+  import torch.nn as nn
+
+  # --- 1. Define a model that has mode-dependent layers ---
+  # nn.Dropout is a classic example. It is active during training but should be
+  # inactive during evaluation.
+  model = nn.Sequential(
+      nn.Linear(20, 50),
+      nn.ReLU(),
+      nn.Dropout(p={{ dropout_rate }}),
+      nn.Linear(50, 2)
+  )
+
+  # Create a single, consistent input tensor for demonstration
+  input_tensor = torch.randn(1, 20)
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Model remains in default .train() mode ---
+  print("--- Running inference with model in TRAIN mode (INCORRECT) ---")
+  # By default, a model is in training mode. Dropout will be active.
+  
+  {% else %}
+  # --- CORRECT PATTERN: Explicitly set model to .eval() mode ---
+  print("--- Running inference with model in EVAL mode (CORRECT) ---")
+  # This disables dropout and sets other layers (like BatchNorm) to evaluation mode.
+  model.eval()
+  
+  {% endif %}
+
+  # --- 2. Run inference multiple times ---
+  # We use torch.no_grad() in both cases, as it's a separate best practice
+  # for disabling gradient calculation, but it does NOT change the model's mode.
+  with torch.no_grad():
+      output1 = model(input_tensor)
+      output2 = model(input_tensor)
+
+  # --- 3. Analyze the results ---
+  print(f"Output of first run:  {output1.numpy()}")
+  print(f"Output of second run: {output2.numpy()}")
+
+  are_equal = torch.equal(output1, output2)
+  print(f"\\nAre the two outputs identical? {are_equal}")
+
+  {% if is_anti_pattern %}
+  if not are_equal:
+      print("BUG CONFIRMED: The outputs are different because `model.eval()` was not called, and the Dropout layer is still active and random.")
+  {% else %}
+  if are_equal:
+      print("CORRECT: The outputs are identical because `model.eval()` disabled the Dropout layer, ensuring deterministic inference.")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test directly checks for the deterministic behavior that is the
+      # entire point of this pattern.
+      
+      {% if is_anti_pattern %}
+      # For the anti-pattern, we expect the outputs to be DIFFERENT because dropout is active.
+      # Note: There is a tiny probability they could be the same if dropout happens
+      # to produce the same mask, but it's astronomically small.
+      assert not torch.equal(output1, output2), "In train mode, outputs from a model with dropout should be different."
+      print("`model.eval()` anti-pattern validated (non-deterministic behavior confirmed).")
+      {% else %}
+      # For the correct pattern, we expect the outputs to be IDENTICAL.
+      assert torch.equal(output1, output2), "In eval mode, outputs should be deterministic."
+      print("Correct use of `model.eval()` validated (deterministic behavior confirmed).")
+      {% endif %}
