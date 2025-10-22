@@ -1,0 +1,76 @@
+plse_version: "2.0"
+pattern_id: "pytorch.data.custom_transform"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates how to create a custom data augmentation transform in PyTorch
+    by subclassing torch.nn.Module. This is a common pattern for implementing
+    novel data augmentation techniques.
+  tags: [pytorch, data-augmentation, transform, dataset, best-practice]
+  pedagogy:
+    concept: "Custom PyTorch Transforms"
+    difficulty: "intermediate"
+
+instruction: "Write a custom PyTorch transform class named '{{ class_name }}' that applies pixel dropout to an image tensor. The class should accept a dropout probability '{{ epsilon_var }}' during initialization."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the custom transform class."
+    default: "PixelDropout"
+    constraints:
+      options: ["PixelDropout", "RandomPixelEraser", "NoiseTransform"]
+  epsilon_var:
+    type: "choice"
+    description: "The variable name for the dropout probability."
+    default: "epsilon"
+    constraints:
+      options: ["epsilon", "p_drop", "noise_level"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "torchvision.transforms as transforms"
+
+template: |
+  class {{ class_name }}(nn.Module):
+      """
+      A custom transform to apply pixel dropout, setting a random
+      fraction of pixels to 0.
+      """
+      def __init__(self, {{ epsilon_var }}: float):
+          super().__init__()
+          if not 0.0 <= {{ epsilon_var }} <= 1.0:
+              raise ValueError(f"Dropout probability must be between 0 and 1.")
+          self.{{ epsilon_var }} = {{ epsilon_var }}
+
+      def forward(self, img: torch.Tensor) -> torch.Tensor:
+          """Applies the dropout to the input image tensor."""
+          if self.{{ epsilon_var }} == 0.0:
+              return img
+
+          # Create a random mask where `1 - epsilon` fraction of
+          # elements are 1 (kept) and `epsilon` are 0 (dropped).
+          mask = torch.empty_like(img).bernoulli_(1.0 - self.{{ epsilon_var }})
+          return img * mask
+
+      def __repr__(self) -> str:
+          return f"{self.__class__.__name__}({{ self.epsilon_var }})"
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the custom transform
+      transform = {{ class_name }}({{ epsilon_var }}=0.5)
+      # Create a dummy tensor of ones
+      test_image = torch.ones(1, 32, 32)
+      
+      transformed_image = transform(test_image)
+      
+      # Check that the shape is unchanged
+      assert test_image.shape == transformed_image.shape
+      # Check that some pixels have been set to zero
+      assert torch.sum(transformed_image) < torch.sum(test_image)
+      print("Custom transform test passed.")
