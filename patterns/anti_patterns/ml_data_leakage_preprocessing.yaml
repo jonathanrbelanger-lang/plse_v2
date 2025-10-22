@@ -1,1 +1,115 @@
+plse_version: "2.0"
+pattern_id: "sklearn.anti_pattern.data_leakage_preprocessing"
 
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates one of the most critical anti-patterns in machine learning: data leakage.
+    This paired pattern shows the incorrect workflow where a data scaler is fit on the
+    entire dataset before splitting, and contrasts it with the correct, robust workflow
+    using an `sklearn.pipeline.Pipeline` to prevent information from the test set
+    from leaking into the training process.
+  tags: [scikit-learn, mlops, anti-pattern, data-leakage, pipeline, correctness]
+  pedagogy:
+    concept: "Preventing Data Leakage in Preprocessing"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}Identify and explain the critical data leakage flaw in this scikit-learn workflow. Then, refactor it.{% else %}Write a robust scikit-learn workflow that uses a `Pipeline` to correctly encapsulate a `StandardScaler` and a `{{ model_choice }}` to prevent data leakage.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  model_choice:
+    type: "choice"
+    description: "The scikit-learn model to use in the example."
+    default: "LogisticRegression"
+    constraints:
+      options: ["LogisticRegression", "SVC"]
+
+requires:
+  - "numpy as np"
+  - "from sklearn.model_selection import train_test_split"
+  - "from sklearn.preprocessing import StandardScaler"
+  - "{% if model_choice == 'LogisticRegression' %}from sklearn.linear_model import LogisticRegression{% elif model_choice == 'SVC' %}from sklearn.svm import SVC{% endif %}"
+  - "from sklearn.pipeline import Pipeline"
+  - "from sklearn.metrics import accuracy_score"
+
+template: |
+  # --- 1. Generate synthetic data ---
+  X, y = np.random.rand(100, 10), np.random.randint(0, 2, 100)
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Preprocessing BEFORE splitting ---
+  print("--- Executing flawed workflow (with data leakage) ---")
+  
+  # 1. Scale the entire dataset
+  # FLAW: The scaler learns the mean and std dev from the ENTIRE dataset,
+  # including the test data that the model is not supposed to see.
+  scaler = StandardScaler()
+  X_scaled = scaler.fit_transform(X)
+  
+  # 2. Split the already-scaled data
+  X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+  
+  # 3. Train the model
+  model = {{ model_choice }}()
+  model.fit(X_train, y_train)
+  
+  # 4. Evaluate
+  # The accuracy score will be unrealistically optimistic because the training
+  # process was influenced by the test set's statistical properties.
+  predictions = model.predict(X_test)
+  accuracy = accuracy_score(y_test, predictions)
+  print(f"Anti-Pattern Accuracy: {accuracy:.4f} (Potentially inflated)")
+
+  {% else %}
+  # --- CORRECT PATTERN: Split first, then use a Pipeline ---
+  print("--- Executing correct workflow (using a Pipeline) ---")
+  
+  # 1. Split the raw data first
+  # This correctly isolates the test set, keeping it completely unseen.
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+  
+  # 2. Define a pipeline that encapsulates preprocessing and modeling
+  # This is the canonical way to prevent data leakage.
+  pipeline = Pipeline([
+      ('scaler', StandardScaler()),
+      ('model', {{ model_choice }}())
+  ])
+  
+  # 3. Train the pipeline
+  # The `fit` method is called ONLY on the training data. The scaler learns
+  # the statistics from X_train and then transforms it.
+  pipeline.fit(X_train, y_train)
+  
+  # 4. Evaluate
+  # When `predict` is called on X_test, the pipeline automatically applies the
+  # scaler's learned transformation before passing the data to the model.
+  predictions = pipeline.predict(X_test)
+  accuracy = accuracy_score(y_test, predictions)
+  print(f"Correct Pipeline Accuracy: {accuracy:.4f} (Realistic estimate)")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      assert 'accuracy' in locals(), "Accuracy was not calculated."
+      assert 0.0 <= accuracy <= 1.0, "Accuracy is not a valid probability."
+      
+      {% if is_anti_pattern %}
+      # Test that the scaler was indeed fit on the full dataset
+      full_data_mean = X.mean()
+      scaler_mean = scaler.mean_
+      assert np.allclose(full_data_mean, scaler_mean.mean()), "Scaler in anti-pattern should have been fit on the full dataset."
+      print("Data leakage anti-pattern validation passed.")
+      {% else %}
+      # Test that the scaler was fit ONLY on the training data
+      train_data_mean = X_train.mean()
+      scaler_mean = pipeline.named_steps['scaler'].mean_
+      assert not np.allclose(train_data_mean, X.mean()), "Sanity check failed: train and full data means are the same."
+      assert np.allclose(train_data_mean, scaler_mean.mean()), "Scaler in correct pattern should have been fit only on the training data."
+      print("Correct pipeline pattern validation passed.")
+      {% endif %}
