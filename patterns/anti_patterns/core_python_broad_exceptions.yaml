@@ -1,0 +1,124 @@
+plse_version: "2.0"
+pattern_id: "python.anti_pattern.broad_exception_clause"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the dangerous anti-pattern of catching overly broad exceptions
+    (like a bare `except:` or `except Exception:`). This paired pattern shows how
+    a broad exception can hide unexpected bugs and system-level errors, and
+    contrasts it with the best practice of catching only the specific exceptions
+    you expect and can handle.
+  tags: [python, core-language, anti-pattern, correctness, exceptions, error-handling, best-practice]
+  pedagogy:
+    concept: "Catching Specific vs. Broad Exceptions"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following function uses a broad `except Exception` clause, which is dangerous. Explain why this is an anti-pattern and refactor it to catch only the specific `ValueError` it is designed to handle.{% else %}Write a robust Python function that parses an age from a string, using a `try...except` block to specifically catch the `ValueError` that occurs with invalid input.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  func_name:
+    type: "choice"
+    description: "The name of the parsing function."
+    default: "parse_age"
+    constraints:
+      options: ["parse_age", "get_user_age", "convert_age_to_int"]
+
+requires: []
+
+template: |
+  def {{ func_name }}(age_str: str) -> int | None:
+      """
+      Parses an age string into an integer.
+      Returns the integer age or None if parsing fails.
+      """
+      print(f"\\n--- Attempting to parse '{age_str}' ---")
+      
+      {% if is_anti_pattern %}
+      # --- ANTI-PATTERN: Catching a broad exception ---
+      try:
+          age = int(age_str)
+          print(f"  -> Successfully parsed age: {age}")
+          return age
+      except Exception as e:
+          # This is dangerous! It catches ANY error, including ones we don't
+          # expect, like a KeyboardInterrupt from the user pressing Ctrl+C,
+          # or a NameError from a typo in our code. It hides bugs.
+          print(f"  -> Caught a generic exception: {type(e).__name__} - {e}")
+          return None
+          
+      {% else %}
+      # --- CORRECT PATTERN: Catching a specific exception ---
+      try:
+          age = int(age_str)
+          print(f"  -> Successfully parsed age: {age}")
+          return age
+      except ValueError:
+          # This is robust. We are only catching the *specific* error that
+          # we expect `int()` to raise for invalid input. Any other
+          # unexpected error (like a TypeError or NameError) will still
+          # crash the program, correctly alerting us to the bug.
+          print(f"  -> Caught the expected ValueError. Input is not a valid integer.")
+          return None
+      {% endif %}
+
+  # --- Demonstration ---
+  if __name__ == "__main__":
+      # 1. A valid input
+      {{ func_name }}("30")
+      
+      # 2. An invalid input that raises ValueError (the expected error)
+      {{ func_name }}("thirty")
+      
+      # 3. An input that raises an *unexpected* error (TypeError)
+      # The anti-pattern will dangerously hide this bug, while the correct
+      # pattern will let the program crash, revealing the problem.
+      print("\\n--- Testing with an unexpected error type (TypeError) ---")
+      try:
+          {{ func_name }}(None)
+      except Exception as e:
+          print(f"Main block caught an unhandled error: {type(e).__name__}")
+          {% if is_anti_pattern %}
+          print("ANALYSIS: The function itself did not crash; it hid the TypeError and returned None, masking a bug.")
+          {% else %}
+          print("ANALYSIS: The function correctly did not catch the TypeError, letting it propagate. This is the desired behavior for unexpected errors.")
+          {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the function's behavior with different inputs.
+      
+      # 1. Test valid input
+      assert {{ func_name }}("42") == 42
+      
+      # 2. Test expected invalid input (ValueError)
+      assert {{ func_name }}("abc") is None
+      
+      # 3. Test unexpected invalid input (TypeError)
+      {% if is_anti_pattern %}
+      # The anti-pattern incorrectly handles the TypeError and returns None.
+      assert {{ func_name }}([1, 2]) is None
+      print("Broad exception anti-pattern validated (bug confirmed).")
+      {% else %}
+      # The correct pattern should NOT catch TypeError. We test this
+      # by asserting that it does, in fact, raise the TypeError.
+      import pytest
+      with pytest.raises(TypeError):
+          {{ func_name }}([1, 2])
+      print("Specific exception pattern validated (correctly propagates unexpected errors).")
+
+      # Mock pytest for our simple validator
+      class MockPytest:
+          def raises(self, exc): return self
+          def __enter__(self): pass
+          def __exit__(self, exc_type, exc_val, exc_tb):
+              assert issubclass(exc_type, TypeError)
+              return True # Suppress exception
+      pytest = MockPytest()
+      {% endif %}
