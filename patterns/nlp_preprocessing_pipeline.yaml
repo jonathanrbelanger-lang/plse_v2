@@ -1,0 +1,163 @@
+plse_version: "2.0"
+pattern_id: "python.nlp.preprocessing_pipeline"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates a complete, end-to-end data engineering pipeline for NLP.
+    This script takes a set of raw text files, cleans and tokenizes them, builds a
+    unified vocabulary, creates word-to-index mappings, and serializes all artifacts
+    (binary token corpus, vocab, metadata) to an output directory.
+  tags: [python, nlp, data-engineering, preprocessing, pipeline, best-practice]
+  pedagogy:
+    concept: "NLP Data Engineering Pipeline"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that defines a complete data preprocessing pipeline for NLP. The script should take a dictionary of input file paths, process them, and save a binary token corpus, a `word_to_int.json` mapping, and a `metadata.json` file to a specified `{{ output_dir_var }}`."
+
+parameters:
+  output_dir_var:
+    type: "choice"
+    description: "The variable name for the output directory path."
+    default: "output_dir"
+    constraints:
+      options: ["output_dir", "artifact_path", "processed_data_dir"]
+  min_freq:
+    type: "choice"
+    description: "The minimum word frequency to be included in the vocabulary."
+    default: 2
+    constraints:
+      options: [1, 2, 5]
+
+requires:
+  - "re"
+  - "json"
+  - "numpy as np"
+  - "os"
+  - "from collections import Counter"
+  - "from typing import List, Dict, Tuple"
+  - "from datetime import datetime"
+
+template: |
+  import re
+  import json
+  import numpy as np
+  import os
+  from collections import Counter
+  from typing import List, Dict, Tuple
+  from datetime import datetime
+
+  def clean_and_tokenize(text: str) -> List[str]:
+      """Cleans and tokenizes a single string of text."""
+      # Keep only alphabetic characters and convert to lowercase
+      words = re.findall(r'\\b[a-zA-Z]+\\b', text.lower())
+      return words
+
+  def build_vocabulary(all_tokens: List[str], min_frequency: int) -> Dict[str, int]:
+      """Builds a word frequency dictionary, filtering by minimum frequency."""
+      word_counts = Counter(all_tokens)
+      return {word: count for word, count in word_counts.items() if count >= min_frequency}
+
+  def create_mappings(vocabulary: Dict[str, int]) -> Tuple[Dict[str, int], Dict[int, str]]:
+      """Creates word-to-index and index-to-word mappings."""
+      sorted_words = sorted(vocabulary.keys(), key=vocabulary.get, reverse=True)
+      word_to_int = {"<UNK>": 0, "<PAD>": 1}
+      for i, word in enumerate(sorted_words, 2):
+          word_to_int[word] = i
+      int_to_word = {idx: word for word, idx in word_to_int.items()}
+      return word_to_int, int_to_word
+
+  def run_preprocessing_pipeline(source_files: Dict[str, str], {{ output_dir_var }}: str):
+      """
+      Orchestrates the entire data preprocessing workflow.
+      """
+      print(f"--- Starting NLP Preprocessing Pipeline ---")
+      os.makedirs({{ output_dir_var }}, exist_ok=True)
+
+      # 1. Read, clean, and tokenize all source files
+      all_tokens = []
+      source_doc_names = []
+      for name, path in source_files.items():
+          with open(path, 'r', encoding='utf-8') as f:
+              text = f.read()
+          all_tokens.extend(clean_and_tokenize(text))
+          source_doc_names.append(name)
+      
+      # 2. Build the vocabulary
+      vocabulary = build_vocabulary(all_tokens, min_frequency={{ min_freq }})
+      
+      # 3. Create mappings
+      word_to_int, int_to_word = create_mappings(vocabulary)
+      
+      # 4. Serialize artifacts to the output directory
+      
+      # a) Create and save the binary token corpus
+      token_ids = [word_to_int.get(word, 0) for word in all_tokens] # 0 is the <UNK> token
+      token_array = np.array(token_ids, dtype=np.uint32)
+      corpus_path = os.path.join({{ output_dir_var }}, "corpus.bin")
+      with open(corpus_path, 'wb') as f:
+          f.write(token_array.tobytes())
+      print(f"  - Saved binary corpus to {corpus_path}")
+
+      # b) Save the mappings
+      w2i_path = os.path.join({{ output_dir_var }}, "word_to_int.json")
+      with open(w2i_path, 'w') as f:
+          json.dump(word_to_int, f, indent=2)
+      print(f"  - Saved word_to_int mapping to {w2i_path}")
+      
+      # c) Save metadata
+      metadata = {
+          "created_utc": datetime.utcnow().isoformat(),
+          "source_documents": source_doc_names,
+          "vocab_size": len(word_to_int),
+          "total_tokens": len(token_array),
+          "min_frequency_filter": {{ min_freq }}
+      }
+      meta_path = os.path.join({{ output_dir_var }}, "metadata.json")
+      with open(meta_path, 'w') as f:
+          json.dump(metadata, f, indent=2)
+      print(f"  - Saved metadata to {meta_path}")
+      
+      print("✅ Pipeline complete.")
+
+  if __name__ == "__main__":
+      # --- Setup a dummy environment for the example ---
+      os.makedirs("raw_text", exist_ok=True)
+      with open("raw_text/doc1.txt", "w") as f:
+          f.write("The quick brown fox jumps over the lazy dog.")
+      with open("raw_text/doc2.txt", "w") as f:
+          f.write("A quick brown dog is not a lazy fox, or is it?")
+      
+      dummy_source_files = {"doc1": "raw_text/doc1.txt", "doc2": "raw_text/doc2.txt"}
+      dummy_output_dir = "processed_corpus"
+      
+      # --- Run the pipeline ---
+      run_preprocessing_pipeline(dummy_source_files, dummy_output_dir)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      import shutil
+      # The main script block already contains a robust self-test.
+      # This test will verify the side effects (created files).
+      
+      # Run the pipeline function
+      run_preprocessing_pipeline(dummy_source_files, dummy_output_dir)
+      
+      # Check that all expected artifact files were created
+      assert os.path.exists(os.path.join(dummy_output_dir, "corpus.bin"))
+      assert os.path.exists(os.path.join(dummy_output_dir, "word_to_int.json"))
+      assert os.path.exists(os.path.join(dummy_output_dir, "metadata.json"))
+      
+      # Check the content of one of the JSON files
+      with open(os.path.join(dummy_output_dir, "metadata.json"), 'r') as f:
+          meta = json.load(f)
+          assert meta["vocab_size"] > 2 # Should have more than just UNK and PAD
+          assert meta["min_frequency_filter"] == {{ min_freq }}
+
+      print("NLP preprocessing pipeline validation passed.")
+      
+      # Clean up the dummy directories
+      shutil.rmtree("raw_text")
+      shutil.rmtree(dummy_output_dir)
