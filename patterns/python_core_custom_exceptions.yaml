@@ -1,0 +1,119 @@
+plse_version: "2.0"
+pattern_id: "python.core.custom_exceptions"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates how to create and use custom exception classes in Python.
+    This pattern shows how to define a domain-specific exception by inheriting
+    from the base `Exception` class. Raising and catching custom exceptions makes
+    error handling more specific, readable, and easier to debug.
+  tags: [python, core-language, error-handling, exceptions, oop, best-practice]
+  pedagogy:
+    concept: "Defining and Using Custom Exceptions"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that defines a custom exception named `{{ exception_name }}`. Then, create a function that `raises` this custom exception if its input is invalid. Finally, show how to call this function within a `try...except` block that specifically catches the custom exception."
+
+parameters:
+  exception_name:
+    type: "choice"
+    description: "The name of the custom exception class."
+    default: "ValidationError"
+    constraints:
+      options: ["ValidationError", "InvalidDataError", "AppSpecificError"]
+  func_name:
+    type: "choice"
+    description: "The name of the function that will raise the exception."
+    default: "parse_user_data"
+    constraints:
+      options: ["parse_user_data", "process_record", "validate_input"]
+
+requires:
+  - "typing"
+
+template: |
+  from typing import Dict
+
+  # --- 1. Define a custom exception class ---
+  # Best practice is to inherit from the base `Exception` class.
+  # This allows it to be caught by a generic `except Exception:`.
+  class {{ exception_name }}(Exception):
+      """A custom exception for data validation errors in this application."""
+      pass
+
+  def {{ func_name }}(user_data: Dict[str, str]):
+      """
+      Parses user data and raises a custom exception if validation fails.
+      """
+      print(f"\\n--- Processing data: {user_data} ---")
+      
+      # Validation rule: 'email' key must be present and contain '@'.
+      if "email" not in user_data or "@" not in user_data["email"]:
+          # Raise our specific, custom exception with a clear message.
+          raise {{ exception_name }}(f"Invalid or missing email in user data: {user_data}")
+      
+      print("  - Data is valid.")
+      # In a real application, further processing would happen here.
+
+  # --- 2. Demonstrate catching the custom exception ---
+  if __name__ == "__main__":
+      valid_data = {"name": "Alice", "email": "alice@example.com"}
+      invalid_data = {"name": "Bob"} # Missing email key
+
+      # --- Case 1: Valid data ---
+      try:
+          {{ func_name }}(valid_data)
+      except {{ exception_name }} as e:
+          print(f"  - Caught an unexpected validation error: {e}")
+
+      # --- Case 2: Invalid data ---
+      try:
+          {{ func_name }}(invalid_data)
+      except {{ exception_name }} as e:
+          # This is the expected path for the invalid data.
+          print(f"  - Successfully caught the expected error: {e}")
+      except Exception as e:
+          print(f"  - Caught a generic, unexpected exception: {e}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test that the function correctly raises our custom exception.
+      import pytest
+
+      valid_payload = {"name": "Test", "email": "test@test.com"}
+      invalid_payload = {"name": "Test", "email": "invalid-email"}
+
+      # 1. Test the success case (should not raise any exception)
+      try:
+          {{ func_name }}(valid_payload)
+      except {{ exception_name }}:
+          pytest.fail("A valid payload should not raise a ValidationError.")
+
+      # 2. Test the failure case (should raise our specific exception)
+      # pytest.raises is the idiomatic way to test for exceptions.
+      with pytest.raises({{ exception_name }}) as excinfo:
+          {{ func_name }}(invalid_payload)
+      
+      # Optionally, check the error message content
+      assert "Invalid or missing email" in str(excinfo.value)
+      
+      print("Custom exception validation passed.")
+
+      # Note: To run this test, you would need to install pytest (`pip install pytest`)
+      # and run it with the pytest command. For our self-contained script,
+      # we will mock pytest for the validation snippet.
+      class MockPytest:
+          def raises(self, exc):
+              return self
+          def __enter__(self):
+              pass
+          def __exit__(self, exc_type, exc_val, exc_tb):
+              assert issubclass(exc_type, {{ exception_name }})
+              assert "Invalid or missing email" in str(exc_val)
+              return True # Suppress the exception
+          def fail(self, msg):
+              raise AssertionError(msg)
+      pytest = MockPytest()
