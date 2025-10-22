@@ -8,8 +8,6 @@ This document provides a set of guidelines for contributing to the Python Latent
 
 This project and everyone participating in it is governed by our [Code of Conduct](LINK_TO_CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior.
 
-*(Note: You will need to create a `CODE_OF_CONDUCT.md` file separately. A standard Contributor Covenant is a good choice.)*
-
 ## How Can I Contribute?
 
 The most valuable way to contribute to PLSE is by **expanding the pattern library**. Our engine is robust, but the richness of the generated dataset depends entirely on the quality and diversity of the patterns in the `patterns/` directory.
