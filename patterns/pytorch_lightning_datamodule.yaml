@@ -1,0 +1,162 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.datamodule"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn)"
+  description: |
+    Demonstrates the best practice for organizing PyTorch data loading using a
+    pytorch_lightning.LightningDataModule. This pattern encapsulates all data-related
+    logic (downloading, splitting, and creating DataLoaders) into a single,
+    reusable class.
+  tags: [pytorch, pytorch-lightning, best-practice, data-loading, dataset]
+  pedagogy:
+    concept: "PyTorch Lightning DataModule"
+    difficulty: "intermediate"
+
+instruction: "Write a PyTorch Lightning DataModule to load a custom dataset from a binary file. The module should handle train, validation, and test splits, and provide corresponding DataLoaders."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the LightningDataModule class."
+    default: "CustomDataModule"
+    constraints:
+      options: ["CustomDataModule", "TextCorpusDataModule", "MyDataModule"]
+  batch_size:
+    type: "choice"
+    description: "The batch size for the DataLoaders."
+    default: 32
+    constraints:
+      options: [32, 64, 128]
+  num_workers:
+    type: "choice"
+    description: "The number of worker processes for data loading."
+    default: 2
+    constraints:
+      options: [0, 2, 4]
+  pin_memory:
+    type: "bool"
+    description: "Whether to use pinned memory for faster CPU-to-GPU data transfer."
+    default: true
+
+requires:
+  - "torch"
+  - "numpy as np"
+  - "pytorch_lightning as pl"
+  - "torch.utils.data as data"
+  - "pathlib"
+
+template: |
+  # A placeholder Dataset class to make the example self-contained
+  class CustomBinaryDataset(data.Dataset):
+      def __init__(self, corpus_path: pathlib.Path, sequence_length: int):
+          super().__init__()
+          self.sequence_length = sequence_length
+          # Use memory-mapping for efficient access to large files
+          self.tokens = np.memmap(corpus_path, dtype=np.uint32, mode='r')
+          if len(self.tokens) <= sequence_length:
+              raise ValueError("Dataset is smaller than the sequence length.")
+          self.num_samples = len(self.tokens) - sequence_length
+
+      def __len__(self) -> int:
+          return self.num_samples
+
+      def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+          # Return input and target sequences (for language modeling)
+          x = torch.from_numpy(self.tokens[idx : idx + self.sequence_length].astype(np.int64))
+          y = torch.from_numpy(self.tokens[idx + 1 : idx + self.sequence_length + 1].astype(np.int64))
+          return x, y
+
+  class {{ class_name }}(pl.LightningDataModule):
+      """
+      A LightningDataModule for loading a tokenized text corpus.
+      """
+      def __init__(
+          self,
+          data_dir: str,
+          batch_size: int = {{ batch_size }},
+          sequence_length: int = 128,
+          num_workers: int = {{ num_workers }}
+      ):
+          super().__init__()
+          # save_hyperparameters() allows Lightning to track these settings
+          self.save_hyperparameters()
+          self.data_dir = pathlib.Path(data_dir)
+          self.corpus_path = self.data_dir / "corpus.bin"
+
+      def prepare_data(self):
+          # This hook is for downloading or preprocessing.
+          # We assume the data is already present in this example.
+          if not self.corpus_path.exists():
+              raise FileNotFoundError(
+                  f"Binary corpus file not found at {self.corpus_path}. "
+                  "Please run the preprocessing script first."
+              )
+
+      def setup(self, stage: str | None = None):
+          # This hook is for splitting data and creating datasets.
+          # It's called on every GPU in distributed training.
+          full_dataset = CustomBinaryDataset(self.corpus_path, self.hparams.sequence_length)
+          train_size = int(0.8 * len(full_dataset))
+          val_size = int(0.1 * len(full_dataset))
+          test_size = len(full_dataset) - train_size - val_size
+          self.train_dataset, self.val_dataset, self.test_dataset = data.random_split(
+              full_dataset, [train_size, val_size, test_size]
+          )
+
+      def train_dataloader(self):
+          return data.DataLoader(
+              self.train_dataset,
+              batch_size=self.hparams.batch_size,
+              shuffle=True,
+              num_workers=self.hparams.num_workers,
+              pin_memory={{ pin_memory }},
+              persistent_workers=self.hparams.num_workers > 0
+          )
+
+      def val_dataloader(self):
+          return data.DataLoader(
+              self.val_dataset,
+              batch_size=self.hparams.batch_size,
+              num_workers=self.hparams.num_workers,
+              pin_memory={{ pin_memory }},
+              persistent_workers=self.hparams.num_workers > 0
+          )
+
+      def test_dataloader(self):
+          return data.DataLoader(
+              self.test_dataset,
+              batch_size=self.hparams.batch_size,
+              num_workers=self.hparams.num_workers
+          )
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Create a dummy data directory and binary file for the test
+      import os
+      data_dir = "temp_data"
+      os.makedirs(data_dir, exist_ok=True)
+      dummy_corpus_path = os.path.join(data_dir, "corpus.bin")
+      dummy_data = np.arange(1000, dtype=np.uint32)
+      with open(dummy_corpus_path, 'wb') as f:
+          f.write(dummy_data.tobytes())
+
+      # Test the DataModule
+      dm = {{ class_name }}(data_dir=data_dir, batch_size=4, sequence_length=32)
+      dm.prepare_data()
+      dm.setup()
+      
+      train_loader = dm.train_dataloader()
+      batch = next(iter(train_loader))
+      x, y = batch
+      
+      assert isinstance(train_loader, data.DataLoader)
+      assert x.shape == (4, 32)
+      assert y.shape == (4, 32)
+      print("DataModule test passed successfully.")
+
+      # Clean up
+      import shutil
+      shutil.rmtree(data_dir)
