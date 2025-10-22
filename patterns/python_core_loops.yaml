@@ -1,0 +1,92 @@
+plse_version: "2.0"
+pattern_id: "python.core.looping_constructs"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the two primary looping constructs in Python: the `for` loop for
+    iterating over a sequence, and the `while` loop for repeating a block of code
+    as long as a condition is true. This pattern also shows the use of `enumerate`
+    and the `break` statement.
+  tags: [python, core-language, control-flow, for-loop, while-loop, iteration]
+  pedagogy:
+    concept: "Looping and Iteration"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that demonstrates a `{{ loop_type }}` loop. The script should iterate and print items, and include a comment explaining the loop's purpose and termination condition."
+
+parameters:
+  loop_type:
+    type: "choice"
+    description: "The type of loop to demonstrate."
+    default: "for"
+    constraints:
+      options: ["for", "while"]
+  iterable_var:
+    type: "choice"
+    description: "The variable name for the list in the for-loop."
+    default: "items"
+    constraints:
+      options: ["items", "data", "collection"]
+  counter_var:
+    type: "choice"
+    description: "The variable name for the counter in the while-loop."
+    default: "counter"
+    constraints:
+      options: ["counter", "i", "n"]
+
+requires: []
+
+template: |
+  {% if loop_type == 'for' %}
+  # --- Demonstrate a `for` loop for definite iteration ---
+  print("--- Demonstrating a `for` loop ---")
+  {{ iterable_var }} = ["apple", "banana", "cherry"]
+  
+  # A `for` loop iterates over each item in a sequence (like a list).
+  # `enumerate` is a Pythonic way to get both the index and the item.
+  for index, item in enumerate({{ iterable_var }}):
+      print(f"Item at index {index}: {item}")
+
+  {% elif loop_type == 'while' %}
+  # --- Demonstrate a `while` loop for indefinite iteration ---
+  print("--- Demonstrating a `while` loop ---")
+  {{ counter_var }} = 0
+  max_value = 5
+  
+  # A `while` loop continues as long as its condition is True.
+  while {{ counter_var }} < max_value:
+      print(f"Counter is now: { {{ counter_var }} }")
+      
+      # It's crucial to have a mechanism to change the condition,
+      # otherwise you create an infinite loop.
+      {{ counter_var }} += 1
+      
+      # The `break` statement can be used to exit a loop early.
+      if {{ counter_var }} == 3:
+          print("  -> Counter reached 3, breaking the loop early.")
+          break
+          
+  print(f"Loop finished. Final counter value: { {{ counter_var }} }")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This pattern's output is primarily through `print`, so we can't easily
+      # assert its correctness without capturing stdout.
+      # A simple test is to ensure the final state of the variables is correct.
+      
+      {% if loop_type == 'for' %}
+      # The loop should complete without error.
+      # We can check the final values of the loop variables.
+      assert index == 2
+      assert item == "cherry"
+      print("`for` loop validation passed.")
+      
+      {% elif loop_type == 'while' %}
+      # The loop should have stopped when the counter reached 3 due to the break.
+      assert {{ counter_var }} == 3, "The `while` loop did not break at the correct value."
+      print("`while` loop validation passed.")
+      {% endif %}
