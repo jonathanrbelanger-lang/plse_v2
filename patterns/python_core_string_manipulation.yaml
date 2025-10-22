@@ -1,0 +1,71 @@
+plse_version: "2.0"
+pattern_id: "python.core.string_manipulation"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates fundamental and idiomatic string manipulation techniques in Python.
+    This pattern covers string cleaning with `.strip()`, case conversion with
+    `.lower()` and `.upper()`, checking prefixes with `.startswith()`, and modern
+    string formatting with f-strings.
+  tags: [python, core-language, string, formatting, f-string, best-practice]
+  pedagogy:
+    concept: "Basic String Manipulation"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that takes a raw string, cleans it by removing leading/trailing whitespace and converting it to lowercase, and then uses an f-string to print a formatted message showing the original and cleaned strings."
+
+parameters:
+  raw_string_var:
+    type: "choice"
+    description: "The variable name for the initial raw string."
+    default: "raw_text"
+    constraints:
+      options: ["raw_text", "input_string", "original_message"]
+  cleaned_string_var:
+    type: "choice"
+    description: "The variable name for the cleaned string."
+    default: "cleaned_text"
+    constraints:
+      options: ["cleaned_text", "processed_string", "formatted_message"]
+
+requires: []
+
+template: |
+  # --- 1. Define the initial raw string ---
+  # It has extra whitespace and mixed case.
+  {{ raw_string_var }} = "   Hello World, this is a test.   "
+
+  # --- 2. Perform string manipulation ---
+  # Best practice is to chain methods for a clean, readable transformation.
+  {{ cleaned_string_var }} = {{ raw_string_var }}.strip().lower()
+
+  # --- 3. Check properties of the string ---
+  starts_with_hello = {{ cleaned_string_var }}.startswith("hello")
+
+  # --- 4. Use an f-string for formatted output ---
+  # f-strings are the modern, readable, and efficient way to format strings.
+  output_message = (
+      f"Original: '{{{ raw_string_var }}}'\\n"
+      f"Cleaned:  '{{{ cleaned_string_var }}}'\\n"
+      f"Starts with 'hello'?: {starts_with_hello}"
+  )
+
+  print(output_message)
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the results of the string manipulation
+      expected_cleaned = "hello world, this is a test."
+      assert {{ cleaned_string_var }} == expected_cleaned, f"Cleaned string is incorrect. Expected '{expected_cleaned}', got '{{{ cleaned_string_var }}}'."
+      
+      assert starts_with_hello is True, ".startswith() check failed."
+      
+      # Verify the f-string output contains the correct parts
+      assert "Original:" in output_message
+      assert "Cleaned:" in output_message
+      assert str(starts_with_hello) in output_message
+      
+      print("String manipulation and f-string validation passed.")
