@@ -1,0 +1,143 @@
+plse_version: "2.0"
+pattern_id: "python.scientific.physics_informed_feature"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates a physics-informed feature engineering technique. This pattern
+    takes a raw input vector, normalizes it to represent a valid quantum state,
+    and then computes a new feature by calculating the squared inner product
+    (projection) of this state onto a pre-computed basis vector (e.g., a system's
+    ground state).
+  tags: [python, scientific-computing, feature-engineering, numpy, torch, physics]
+  pedagogy:
+    concept: "Physics-Informed Feature Engineering"
+    difficulty: "advanced"
+
+instruction: "Write a Python function named `{{ func_name }}` that computes a physics-informed feature. The function should first normalize an input tensor to unit length, then compute the squared absolute value of the dot product between the normalized input and a provided `{{ basis_vec_name }}`."
+
+parameters:
+  func_name:
+    type: "choice"
+    description: "The name of the feature calculation function."
+    default: "calculate_physics_projection"
+    constraints:
+      options: ["calculate_physics_projection", "compute_overlap_feature", "get_state_projection"]
+  basis_vec_name:
+    type: "choice"
+    description: "The variable name for the basis vector."
+    default: "basis_vector"
+    constraints:
+      options: ["basis_vector", "ground_state", "psi_0"]
+  framework:
+    type: "choice"
+    description: "The numerical framework to use for the implementation."
+    default: "torch"
+    constraints:
+      options: ["torch", "numpy"]
+
+requires:
+  - "torch"
+  - "numpy as np"
+
+template: |
+  {% if framework == 'torch' %}
+  import torch
+
+  def normalize_state_torch(v_input: torch.Tensor) -> torch.Tensor:
+      """Normalizes an input tensor to have a Euclidean norm of 1."""
+      norm = torch.linalg.norm(v_input)
+      if norm == 0:
+          # Avoid division by zero; return a uniform state
+          return torch.full_like(v_input, 1.0 / (v_input.numel()**0.5))
+      return v_input / norm
+
+  def {{ func_name }}(input_vector: torch.Tensor, {{ basis_vec_name }}: torch.Tensor) -> float:
+      """
+      Calculates a physics-informed feature using PyTorch.
+      The feature is the squared overlap: |<basis|input>|^2
+      """
+      # 1. Normalize the input to represent a valid state vector
+      psi_in = normalize_state_torch(input_vector.cfloat())
+      
+      # 2. Ensure the basis vector is also complex for the inner product
+      psi_basis = {{ basis_vec_name }}.cfloat()
+      
+      # 3. Calculate the inner product (dot product for complex vectors)
+      overlap = torch.vdot(psi_basis, psi_in)
+      
+      # 4. Return the squared absolute value (probability)
+      return torch.abs(overlap)**2
+  
+  {% elif framework == 'numpy' %}
+  import numpy as np
+
+  def normalize_state_numpy(v_input: np.ndarray) -> np.ndarray:
+      """Normalizes an input array to have a Euclidean norm of 1."""
+      norm = np.linalg.norm(v_input)
+      if norm == 0:
+          return np.full_like(v_input, 1.0 / (v_input.size**0.5))
+      return v_input / norm
+
+  def {{ func_name }}(input_vector: np.ndarray, {{ basis_vec_name }}: np.ndarray) -> float:
+      """
+      Calculates a physics-informed feature using NumPy.
+      The feature is the squared overlap: |<basis|input>|^2
+      """
+      # 1. Normalize the input
+      psi_in = normalize_state_numpy(input_vector).astype(np.complex128)
+      
+      # 2. Ensure the basis vector is also complex
+      psi_basis = {{ basis_vec_name }}.astype(np.complex128)
+      
+      # 3. Calculate the inner product (vdot handles conjugation correctly)
+      overlap = np.vdot(psi_basis, psi_in)
+      
+      # 4. Return the squared absolute value
+      return np.abs(overlap)**2
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the feature calculation logic
+      DIM = 16
+      {% if framework == 'torch' %}
+      # 1. Test with an orthogonal vector
+      vec1 = torch.zeros(DIM); vec1[0] = 1.0
+      vec2 = torch.zeros(DIM); vec2[1] = 1.0
+      projection_orthogonal = {{ func_name }}(vec1, vec2)
+      assert torch.isclose(projection_orthogonal, torch.tensor(0.0)), "Orthogonal vectors should have zero projection."
+
+      # 2. Test with a parallel vector
+      vec3 = torch.tensor([1.0] * DIM)
+      projection_parallel = {{ func_name }}(vec3, vec3)
+      assert torch.isclose(projection_parallel, torch.tensor(1.0)), "A vector projected onto itself should have a projection of 1."
+      
+      # 3. Test with a non-trivial case
+      vec4 = torch.randn(DIM)
+      vec5 = torch.randn(DIM)
+      projection_general = {{ func_name }}(vec4, vec5)
+      assert 0.0 <= projection_general <= 1.0, "Projection should be a probability between 0 and 1."
+      
+      {% elif framework == 'numpy' %}
+      # 1. Test with an orthogonal vector
+      vec1 = np.zeros(DIM); vec1[0] = 1.0
+      vec2 = np.zeros(DIM); vec2[1] = 1.0
+      projection_orthogonal = {{ func_name }}(vec1, vec2)
+      assert np.isclose(projection_orthogonal, 0.0), "Orthogonal vectors should have zero projection."
+
+      # 2. Test with a parallel vector
+      vec3 = np.ones(DIM)
+      projection_parallel = {{ func_name }}(vec3, vec3)
+      assert np.isclose(projection_parallel, 1.0), "A vector projected onto itself should have a projection of 1."
+      
+      # 3. Test with a non-trivial case
+      vec4 = np.random.randn(DIM)
+      vec5 = np.random.randn(DIM)
+      projection_general = {{ func_name }}(vec4, vec5)
+      assert 0.0 <= projection_general <= 1.0, "Projection should be a probability between 0 and 1."
+      {% endif %}
+      
+      print("Physics-informed feature validation passed.")
