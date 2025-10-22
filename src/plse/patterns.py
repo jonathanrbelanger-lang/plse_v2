@@ -1,13 +1,11 @@
 """
-Defines the internal dataclasses used by the PLSE application after
-YAML patterns have been parsed and validated.
+Defines the internal dataclasses used by the PLSE application.
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 
-# Import the Pydantic schema for type hinting in our classmethod
-from .schema import RawPatternSchema
+from .schema import PLSEPatternSchema
 
 @dataclass
 class Pedagogy:
@@ -31,9 +29,8 @@ class Parameter:
 
 @dataclass
 class Components:
-    """Architectural blueprint of the code to be generated."""
-    imports: str
-    model_definition: str
+    imports: str = ""
+    model_definition: Optional[str] = None
     data_setup: Optional[str] = None
     training_loop: Optional[str] = None
     evaluation: Optional[str] = None
@@ -46,10 +43,7 @@ class Validation:
 
 @dataclass
 class PLSEPattern:
-    """
-    The internal, validated representation of a single PLSE pattern.
-    This is the definitive structure for the application.
-    """
+    """The internal, validated representation of a single PLSE pattern."""
     plse_version: str
     pattern_id: str
     metadata: Metadata
@@ -60,11 +54,7 @@ class PLSEPattern:
     requires: List[str] = field(default_factory=list)
 
     @classmethod
-    def from_schema(cls, schema: RawPatternSchema) -> "PLSEPattern":
-        """
-        Factory method to convert a validated Pydantic schema object
-        into the internal PLSEPattern dataclass.
-        """
+    def from_schema(cls, schema: PLSEPatternSchema) -> "PLSEPattern":
         pedagogy_obj = Pedagogy(**schema.metadata.pedagogy.model_dump())
         metadata_obj = Metadata(
             author=schema.metadata.author,
@@ -76,12 +66,8 @@ class PLSEPattern:
             name: Parameter(**p_data.model_dump())
             for name, p_data in schema.parameters.items()
         } if schema.parameters else {}
-        
         components_obj = Components(**schema.components.model_dump())
-        
-        validation_obj = Validation(
-            **schema.validation.model_dump()
-        ) if schema.validation else Validation()
+        validation_obj = Validation(**schema.validation.model_dump()) if schema.validation else Validation()
 
         return cls(
             plse_version=schema.plse_version,
