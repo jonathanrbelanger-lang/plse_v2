@@ -1,0 +1,120 @@
+plse_version: "2.0"
+pattern_id: "mlops.setup.compile_cpp_dependency"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from PyachamamaQuantiz.ipynb)"
+  description: |
+    Demonstrates a common MLOps setup task: cloning an external C++ repository
+    and compiling its source code to produce executable tools. This pattern shows
+    how to use Python's `subprocess` module to orchestrate shell commands like
+    `git` and `cmake`.
+  tags: [mlops, setup, git, cmake, subprocess, best-practice]
+  pedagogy:
+    concept: "Compiling C++ Dependencies in a Python Workflow"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script that clones the '{{ repo_name }}' git repository and compiles it using the `{{ build_system }}` build system. The script must verify that the compilation was successful by checking for the existence of a key executable."
+
+parameters:
+  repo_name:
+    type: "choice"
+    description: "The name of the repository to clone."
+    default: "llama.cpp"
+    constraints:
+      options: ["llama.cpp", "my_toolchain"]
+  build_system:
+    type: "choice"
+    description: "The C++ build system to use."
+    default: "cmake"
+    constraints:
+      options: ["cmake", "make"]
+
+requires:
+  - "subprocess"
+  - "os"
+  - "shutil"
+
+template: |
+  import subprocess
+  import os
+  import shutil
+
+  REPO_URL = "https://github.com/ggerganov/{{ repo_name }}.git"
+  REPO_DIR = "{{ repo_name }}"
+
+  def run_command(command: list, working_dir: str = None):
+      """Runs a shell command and checks for errors."""
+      print(f"Running command: {' '.join(command)}")
+      try:
+          subprocess.run(command, check=True, capture_output=True, text=True)
+      except subprocess.CalledProcessError as e:
+          print(f"ERROR: Command failed with exit code {e.returncode}", file=sys.stderr)
+          print(f"Stderr: {e.stderr}", file=sys.stderr)
+          raise
+      except FileNotFoundError:
+          print(f"ERROR: Command '{command[0]}' not found.", file=sys.stderr)
+          raise
+
+  def setup_and_compile():
+      """Clones and compiles the C++ dependency."""
+      # 1. Clone the repository
+      if not os.path.isdir(REPO_DIR):
+          run_command(["git", "clone", REPO_URL])
+      else:
+          print(f"Directory '{REPO_DIR}' already exists, skipping clone.")
+
+      # 2. Compile the code using the selected build system
+  {% if build_system == 'cmake' %}
+      print("--- Compiling with CMake ---")
+      build_dir = os.path.join(REPO_DIR, "build")
+      run_command(["cmake", "-B", build_dir], working_dir=REPO_DIR)
+      run_command(["cmake", "--build", build_dir, "--config", "Release"])
+      executable_path = os.path.join(build_dir, "bin", "main")
+  {% elif build_system == 'make' %}
+      print("--- Compiling with Make ---")
+      run_command(["make"], working_dir=REPO_DIR)
+      executable_path = os.path.join(REPO_DIR, "main")
+  {% endif %}
+
+      # 3. Verify that the compilation was successful
+      if os.path.exists(executable_path):
+          print(f"✅ Compilation successful. Executable found at: {executable_path}")
+      else:
+          raise RuntimeError(f"❌ FATAL: Compilation failed. Executable not found at {executable_path}.")
+
+  if __name__ == "__main__":
+      # Clean up previous runs for a clean test
+      if os.path.isdir(REPO_DIR):
+          shutil.rmtree(REPO_DIR)
+      setup_and_compile()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test uses mocking to avoid actual git/cmake commands,
+      # and instead verifies the script's logic and error handling.
+      from unittest.mock import patch, MagicMock
+
+      # Mock the subprocess.run to simulate success
+      with patch('subprocess.run') as mock_run:
+          mock_run.return_value = MagicMock(returncode=0)
+          
+          # Create dummy directories and a fake executable to satisfy the script's checks
+          os.makedirs(os.path.join("{{ repo_name }}", "build", "bin"), exist_ok=True)
+          fake_executable = os.path.join("{{ repo_name }}", "build", "bin", "main")
+          with open(fake_executable, "w") as f:
+              f.write("#!/bin/bash\\necho 'mock'")
+          os.chmod(fake_executable, 0o755)
+
+          # Run the main function
+          setup_and_compile()
+          
+          # Assert that git and cmake commands were called
+          assert any("git" in call.args[0] for call in mock_run.call_args_list)
+          assert any("cmake" in call.args[0] for call in mock_run.call_args_list)
+      
+      print("C++ dependency compilation script validation passed.")
+      
+      # Clean up
+      shutil.rmtree("{{ repo_name }}")
