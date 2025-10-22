@@ -1,0 +1,145 @@
+plse_version: "2.0"
+pattern_id: "pytorch.data.memory_mapped_dataset"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from VSMPSOAttn.ipynb)"
+  description: |
+    Demonstrates a high-performance data loading pattern for datasets that are
+    too large to fit into RAM. This pattern uses `numpy.memmap` to create a
+    NumPy array that is backed by a file on disk. The operating system handles
+    paging data into memory on demand, allowing for efficient access to massive files.
+  tags: [pytorch, dataset, data-loading, performance, big-data, numpy, best-practice]
+  pedagogy:
+    concept: "Memory-Efficient Large File Handling with Memory-Mapping"
+    difficulty: "advanced"
+
+instruction: "Write a PyTorch `Dataset` class named `{{ class_name }}` that uses `numpy.memmap` to read from a large binary data file. The `__init__` method should open the file on disk, and the `__getitem__` method should slice from it as if it were a normal array."
+
+parameters:
+  class_name:
+    type: "choice"
+    description: "The name of the memory-mapped dataset class."
+    default: "MemoryMappedDataset"
+    constraints:
+      options: ["MemoryMappedDataset", "LargeFileDataset", "OnDiskDataset"]
+  data_type:
+    type: "choice"
+    description: "The NumPy data type of the elements in the binary file."
+    default: "np.float32"
+    constraints:
+      options: ["np.float32", "np.uint32", "np.int64"]
+  item_shape_var:
+    type: "choice"
+    description: "The variable name for the shape of a single item in the dataset."
+    default: "item_shape"
+    constraints:
+      options: ["item_shape", "feature_dim", "sample_size"]
+
+requires:
+  - "torch"
+  - "numpy as np"
+  - "os"
+  - "from torch.utils.data import Dataset, DataLoader"
+
+template: |
+  class {{ class_name }}(Dataset):
+      """
+      A PyTorch Dataset that efficiently reads data from a large binary file
+      on disk using memory-mapping (memmap).
+      
+      This is ideal for datasets that are too large to fit into RAM.
+      """
+      def __init__(self, binary_file_path: str, {{ item_shape_var }}: int):
+          super().__init__()
+          
+          if not os.path.exists(binary_file_path):
+              raise FileNotFoundError(f"Dataset file not found: {binary_file_path}")
+          
+          self.path = binary_file_path
+          self.{{ item_shape_var }} = {{ item_shape_var }}
+          
+          # Use numpy.memmap to open the file on disk without loading it into memory.
+          # The OS will handle paging the required data into RAM on demand.
+          self.data = np.memmap(self.path, dtype={{ data_type }}, mode='r')
+          
+          # Calculate the number of samples
+          self.num_samples = self.data.shape[0] // self.{{ item_shape_var }}
+
+      def __len__(self) -> int:
+          """Returns the total number of samples in the dataset."""
+          return self.num_samples
+
+      def __getitem__(self, idx: int) -> torch.Tensor:
+          """
+          Retrieves a single sample from the dataset.
+          
+          This only reads the specific slice of the file needed for this index,
+          making it highly memory-efficient.
+          """
+          start = idx * self.{{ item_shape_var }}
+          end = start + self.{{ item_shape_var }}
+          
+          # Slice the memory-mapped array and convert only that slice to a torch.Tensor
+          sample_np = self.data[start:end]
+          return torch.from_numpy(sample_np)
+
+  if __name__ == "__main__":
+      # --- Example Usage ---
+      DUMMY_FILE = "large_dataset.bin"
+      NUM_SAMPLES = 1000
+      ITEM_SHAPE = 128
+      
+      try:
+          # 1. Create a large dummy binary file to simulate a real dataset
+          print(f"Creating a dummy binary file: {DUMMY_FILE}...")
+          dummy_data = np.arange(NUM_SAMPLES * ITEM_SHAPE, dtype={{ data_type }})
+          with open(DUMMY_FILE, "wb") as f:
+              f.write(dummy_data.tobytes())
+          
+          # 2. Instantiate the memory-mapped dataset
+          dataset = {{ class_name }}(binary_file_path=DUMMY_FILE, {{ item_shape_var }}=ITEM_SHAPE)
+          print(f"Successfully loaded dataset with {len(dataset)} samples.")
+          
+          # 3. Use it with a standard DataLoader
+          dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+          
+          # 4. Load one batch to verify it works
+          first_batch = next(iter(dataloader))
+          
+          print(f"Successfully loaded a batch of shape: {first_batch.shape}")
+          assert first_batch.shape == (4, ITEM_SHAPE)
+
+      finally:
+          # 5. Clean up the dummy file
+          if os.path.exists(DUMMY_FILE):
+              os.remove(DUMMY_FILE)
+              print(f"Cleaned up dummy file: {DUMMY_FILE}")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # The main script block provides a robust test. This snippet re-verifies it.
+      DUMMY_FILE = "test_large_dataset.bin"
+      NUM_SAMPLES = 100
+      ITEM_SHAPE = 64
+      
+      try:
+          dummy_data = np.arange(NUM_SAMPLES * ITEM_SHAPE, dtype={{ data_type }})
+          with open(DUMMY_FILE, "wb") as f:
+              f.write(dummy_data.tobytes())
+          
+          dataset = {{ class_name }}(DUMMY_FILE, ITEM_SHAPE)
+          
+          assert len(dataset) == NUM_SAMPLES
+          
+          # Check if the first item is retrieved correctly
+          first_item = dataset[0]
+          expected_first_item = torch.from_numpy(dummy_data[0:ITEM_SHAPE])
+          assert torch.equal(first_item, expected_first_item)
+          
+          print("Memory-mapped dataset validation passed.")
+          
+      finally:
+          if os.path.exists(DUMMY_FILE):
+              os.remove(DUMMY_FILE)
