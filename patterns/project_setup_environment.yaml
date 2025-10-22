@@ -1,0 +1,109 @@
+plse_version: "2.0"
+pattern_id: "project.setup.colab_environment"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from user notebooks)"
+  description: |
+    Demonstrates the foundational best practices for initializing a reproducible
+    machine learning project in a notebook environment like Google Colab.
+    This pattern covers dependency installation, directory scaffolding,
+    and hardware validation.
+  tags: [python, mlops, setup, colab, reproducibility, best-practice]
+  pedagogy:
+    concept: "Reproducible Project Initialization"
+    difficulty: "intermediate"
+
+instruction: "Write a Python script to initialize a project named '{{ project_name }}'. The script should install a '{{ dependency_set }}' set of Python packages, create a standard directory structure, and validate the hardware environment."
+
+parameters:
+  project_name:
+    type: "choice"
+    description: "The root directory name for the new project."
+    default: "my_ml_project"
+    constraints:
+      options: ["my_ml_project", "vision_project", "nlp_research"]
+  dependency_set:
+    type: "choice"
+    description: "The set of dependencies to install."
+    default: "basic"
+    constraints:
+      options: ["basic", "full"]
+
+requires:
+  - "sys"
+  - "subprocess"
+  - "platform"
+  - "pathlib"
+  - "torch" # Required for the validation part
+
+template: |
+  # ============================================================================
+  # Project Initialization Script for '{{ project_name }}'
+  # ============================================================================
+
+  import sys
+  import subprocess
+  import platform
+  from pathlib import Path
+
+  def install_dependencies():
+      """Installs the required Python packages using pip."""
+      print("--- Installing Dependencies ---")
+  {% if dependency_set == 'basic' %}
+      packages = ["numpy==1.26.4", "scikit-learn==1.4.2", "pandas"]
+  {% elif dependency_set == 'full' %}
+      packages = ["numpy==1.26.4", "scikit-learn==1.4.2", "pandas", "torch==2.3.0", "pytorch-lightning==2.2.5"]
+  {% endif %}
+      for package in packages:
+          try:
+              print(f"Installing {package}...")
+              subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", package])
+          except subprocess.CalledProcessError:
+              print(f"ERROR: Failed to install {package}. Aborting.", file=sys.stderr)
+              sys.exit(1)
+      print("✅ All dependencies installed successfully.")
+
+  def create_project_structure(root_path: Path):
+      """Creates a standard directory structure for the project."""
+      print(f"--- Creating directory structure at {root_path} ---")
+      (root_path / "data").mkdir(parents=True, exist_ok=True)
+      (root_path / "notebooks").mkdir(exist_ok=True)
+      (root_path / "src").mkdir(exist_ok=True)
+      (root_path / "outputs").mkdir(exist_ok=True)
+      print("✅ Directory structure created.")
+
+  def validate_environment():
+      """Checks and prints information about the runtime environment."""
+      print("--- Validating Environment ---")
+      print(f"Python Version: {platform.python_version()}")
+      try:
+          import torch
+          device = "cuda" if torch.cuda.is_available() else "cpu"
+          print(f"PyTorch Version: {torch.__version__}")
+          print(f"Detected Device: {device.upper()}")
+      except ImportError:
+          print("PyTorch not in this dependency set, skipping device check.")
+      print("✅ Environment validation complete.")
+
+  def main():
+      """Main orchestration function."""
+      project_root = Path("{{ project_name }}")
+      install_dependencies()
+      create_project_structure(project_root)
+      validate_environment()
+      print("\n🎉 Project '{{ project_name }}' initialized successfully!")
+
+  if __name__ == "__main__":
+      main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test verifies the side-effect of the script: directory creation.
+      import os
+      # The main script will have already run, creating the directory.
+      assert os.path.isdir("{{ project_name }}"), "Project root directory was not created."
+      assert os.path.isdir("{{ project_name }}/src"), "'src' directory was not created."
+      assert os.path.isdir("{{ project_name }}/data"), "'data' directory was not created."
+      print("Directory structure validation passed.")
