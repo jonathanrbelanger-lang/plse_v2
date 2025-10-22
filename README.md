@@ -50,11 +50,7 @@ Discovering Available Patterns
 
 To see a full, up-to-date catalog of all available patterns, you can run our discovery script:
 
-code
-Bash
-download
-content_copy
-expand_less
+'''Bash
 # Print a list of all patterns to the console
 python scripts/list_patterns.py
 
@@ -78,21 +74,13 @@ Navigate to the root directory.
 
 Create and activate a virtual environment (recommended):
 
-code
-Bash
-download
-content_copy
-expand_less
+'''Bash
 python3 -m venv .venv
 source .venv/bin/activate
 
 Install the project and all its dependencies:
 
-code
-Bash
-download
-content_copy
-expand_less
+'''Bash
 pip install -e .
 
 (The -e flag installs the project in "editable" mode, which is recommended for development.)
@@ -105,11 +93,7 @@ Configure the run: Open main.py and adjust the configuration variables inside th
 
 Run the generator: Execute the script from your terminal.
 
-code
-Bash
-download
-content_copy
-expand_less
+'''Bash
 python main.py
 
 The script will scan the patterns/ directory, generate and validate the code samples, and save the final dataset to a training_dataset.jsonl file in your project root.
