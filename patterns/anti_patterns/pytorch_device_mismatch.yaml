@@ -1,0 +1,104 @@
+plse_version: "2.0"
+pattern_id: "pytorch.anti_pattern.device_mismatch"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the common `RuntimeError` caused by a device mismatch in PyTorch.
+    This paired pattern shows the incorrect code where a model is on the GPU but the
+    input tensor is on the CPU, and contrasts it with the correct pattern where
+    both are explicitly moved to the same target device.
+  tags: [pytorch, anti-pattern, correctness, gpu, cpu, device, runtime-error]
+  pedagogy:
+    concept: "Ensuring Consistent Device Placement in PyTorch"
+    difficulty: "beginner"
+
+instruction: "{% if is_anti_pattern %}The following PyTorch code will raise a RuntimeError because the model and the data are on different devices. Identify and fix this device mismatch.{% else %}Write a robust PyTorch script that correctly places both a model and its input tensor on the same target device (GPU if available, otherwise CPU) before performing a forward pass.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the flawed code. If false, generate the corrected solution."
+    default: true
+  device_var:
+    type: "choice"
+    description: "The variable name for the torch device object."
+    default: "device"
+    constraints:
+      options: ["device", "target_device"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+
+template: |
+  import torch
+  import torch.nn as nn
+
+  # --- 1. Setup: Define model and select device ---
+  # This pattern is most illustrative when a GPU is available.
+  {{ device_var }} = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  print(f"Target device selected: { {{ device_var }} }")
+
+  model = nn.Linear(10, 2)
+  input_tensor = torch.randn(4, 10)
+
+  # --- 2. Move the model to the target device ---
+  model.to({{ device_var }})
+  print(f"Model moved to: {next(model.parameters()).device}")
+
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Input tensor is NOT moved to the device ---
+  print(f"Input tensor remains on: {input_tensor.device}")
+  print("\\nAttempting forward pass (will likely fail if GPU is available)...")
+  
+  try:
+      # This will raise a RuntimeError:
+      # "Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!"
+      output = model(input_tensor)
+      print("Forward pass succeeded (only possible if device is CPU).")
+  except RuntimeError as e:
+      print(f"\\nSUCCESSFULLY CAUGHT EXPECTED ERROR:")
+      print(f"  - Type: {type(e).__name__}")
+      print(f"  - Message: {e}")
+      print("\\nANALYSIS: The error occurred because the model is on the GPU but the data is on the CPU.")
+
+  {% else %}
+  # --- CORRECT PATTERN: Input tensor IS moved to the same device ---
+  input_tensor = input_tensor.to({{ device_var }})
+  print(f"Input tensor moved to: {input_tensor.device}")
+  print("\\nAttempting forward pass...")
+
+  try:
+      output = model(input_tensor)
+      print("\\n✅ SUCCESS: Forward pass completed without errors.")
+      print(f"Output tensor is on device: {output.device}")
+  except RuntimeError as e:
+      print(f"\\n❌ FAILED: An unexpected error occurred: {e}")
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates the behavior of the script.
+      
+      {% if is_anti_pattern %}
+      # For the anti-pattern, we can't assert the error directly in this simple
+      # validator, but we can check if the devices are different (if cuda is available).
+      if torch.cuda.is_available():
+          model_device = next(model.parameters()).device.type
+          tensor_device = input_tensor.device.type
+          assert model_device != tensor_device, "In the anti-pattern, devices should be different."
+      print("Device mismatch anti-pattern validated.")
+      
+      {% else %}
+      # For the correct pattern, we assert that the devices are the same.
+      model_device = next(model.parameters()).device.type
+      tensor_device = input_tensor.device.type
+      assert model_device == tensor_device, "Model and tensor should be on the same device."
+      
+      # And that the output is also on the correct device.
+      assert output.device.type == model_device
+      print("Correct device placement pattern validated.")
+      {% endif %}
