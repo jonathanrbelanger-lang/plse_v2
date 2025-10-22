@@ -1,0 +1,115 @@
+plse_version: "2.0"
+pattern_id: "python.stdlib.logging_basic"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the best practice for application logging using Python's built-in
+    `logging` module. This pattern shows how to configure a basic logger to
+    control the message format and severity level, and how to log messages for
+    debugging, information, warnings, and errors.
+  tags: [python, core-language, standard-library, logging, best-practice, debugging]
+  pedagogy:
+    concept: "Structured Application Logging"
+    difficulty: "beginner"
+
+instruction: "Write a Python script that uses the `logging` module. The script should configure a logger to display messages of level `{{ log_level }}` and higher, with a custom format. Then, it should log several messages at different severity levels to demonstrate how the level filtering works."
+
+parameters:
+  log_level:
+    type: "choice"
+    description: "The minimum severity level for messages to be displayed."
+    default: "INFO"
+    constraints:
+      options: ["DEBUG", "INFO", "WARNING"]
+  logger_name:
+    type: "choice"
+    description: "The name for the logger instance."
+    default: "__name__" # Best practice: use the module's name
+    constraints:
+      options: ["__name__", "'my_app'", "'data_pipeline'"]
+
+requires:
+  - "logging"
+
+template: |
+  import logging
+
+  # --- 1. Configure the root logger ---
+  # Best practice: Configure logging once at the start of the application.
+  # The format includes the timestamp, logger name, level, and message.
+  LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  logging.basicConfig(level=logging.{{ log_level }}, format=LOG_FORMAT)
+
+  # --- 2. Get a logger instance ---
+  # Best practice: Use the __name__ special variable. This creates a logger
+  # named after the current module (e.g., 'my_script').
+  logger = logging.getLogger({{ logger_name }})
+
+  def process_data(data: list):
+      """A dummy function to demonstrate logging within an application."""
+      
+      logger.debug(f"Starting to process a list with {len(data)} items.")
+      
+      total = 0
+      for i, item in enumerate(data):
+          logger.info(f"Processing item #{i}: {item}")
+          if not isinstance(item, (int, float)):
+              logger.warning(f"Item '{item}' is not a number. Skipping.")
+              continue
+          total += item
+      
+      logger.info(f"Finished processing. Total sum: {total}")
+      return total
+
+  def main():
+      """Main function to run the demonstration."""
+      print(f"Logger is configured to show messages with level {{ log_level }} and above.\\n")
+      
+      sample_data = [10, 20, "oops", 30, 40]
+      
+      try:
+          process_data(sample_data)
+      except Exception:
+          # Use exc_info=True to automatically include exception details
+          logger.error("An unexpected error occurred in main.", exc_info=True)
+
+  if __name__ == "__main__":
+      main()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Testing logging is about capturing and inspecting the output.
+      import io
+      
+      # 1. Create an in-memory text stream to capture log output
+      log_stream = io.StringIO()
+      
+      # 2. Get the root logger and redirect its output to our stream
+      root_logger = logging.getLogger()
+      # Keep the original handlers to restore them later
+      original_handlers = root_logger.handlers
+      root_logger.handlers = [logging.StreamHandler(log_stream)]
+      root_logger.setLevel(logging.{{ log_level }}) # Ensure level is set for the test
+      
+      # 3. Run the main function
+      main()
+      
+      # 4. Restore the original logging configuration
+      root_logger.handlers = original_handlers
+      
+      # 5. Get the captured output and perform assertions
+      log_output = log_stream.getvalue()
+      
+      assert "Processing item #0: 10" in log_output, "INFO message was not logged."
+      assert "Item 'oops' is not a number. Skipping." in log_output, "WARNING message was not logged."
+      
+      {% if log_level == 'DEBUG' %}
+      assert "Starting to process a list" in log_output, "DEBUG message should be visible at DEBUG level."
+      {% else %}
+      assert "Starting to process a list" not in log_output, "DEBUG message should be filtered out at {{ log_level }} level."
+      {% endif %}
+      
+      print("Logging pattern validation passed successfully.")
