@@ -1,0 +1,136 @@
+plse_version: "2.0"
+pattern_id: "mlops.experiment_suite.multi_seed"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates a complete MLOps pattern for running a scientific experiment suite.
+    This script iterates through multiple model configurations and multiple random seeds,
+    executes a training run for each combination, and aggregates the results into a
+    pandas DataFrame for statistical analysis.
+  tags: [mlops, experiment-design, pytorch-lightning, pandas, reproducibility, best-practice]
+  pedagogy:
+    concept: "Automated Multi-Seed Experimentation"
+    difficulty: "advanced"
+
+instruction: "Write a Python script that automates an experiment. It should define a list of model configurations and a list of random seeds. The script must loop through every combination, set the seed using `pytorch_lightning.seed_everything`, run a mock training function, and collect all results into a final pandas DataFrame."
+
+parameters:
+  num_seeds:
+    type: "choice"
+    description: "The number of random seeds to run each experiment with."
+    default: 3
+    constraints:
+      options: [2, 3, 5]
+  results_var_name:
+    type: "choice"
+    description: "The variable name for the final pandas DataFrame."
+    default: "results_df"
+    constraints:
+      options: ["results_df", "experiment_summary", "all_runs_data"]
+  model_configs_var:
+    type: "choice"
+    description: "The variable name for the list of model configurations."
+    default: "MODEL_CONFIGS"
+    constraints:
+      options: ["MODEL_CONFIGS", "EXPERIMENT_GRID", "MODELS_TO_TEST"]
+
+requires:
+  - "pandas as pd"
+  - "pytorch_lightning as pl"
+  - "typing"
+  - "time"
+
+template: |
+  import pandas as pd
+  import pytorch_lightning as pl
+  from typing import List, Dict, Any
+  import time
+  import random
+
+  # --- Mock Training Function ---
+  # In a real application, this would be a complex function like the
+  # 'run_experiment' pattern we defined earlier.
+  def mock_training_run(model_name: str, seed: int, train_noise: float) -> Dict[str, Any]:
+      """Simulates a model training run and returns mock results."""
+      print(f"  -> Training '{model_name}' with seed={seed}, noise={train_noise}...")
+      time.sleep(0.1) # Simulate work
+      # Simulate better performance for Model A and with noise
+      base_accuracy = 0.9 if model_name == "Model_A" else 0.85
+      noise_benefit = 0.05 if train_noise > 0 else 0.0
+      final_accuracy = base_accuracy + noise_benefit - random.uniform(0.01, 0.03)
+      return {"test_accuracy": final_accuracy}
+
+  # --- Main Experiment Orchestration ---
+  def run_experimental_suite():
+      """
+      Orchestrates the entire experimental campaign, running all model configs
+      across all random seeds and collecting the results.
+      """
+      # 1. Define the experimental grid
+      {{ model_configs_var }}: List[Dict[str, Any]] = [
+          {"name": "Model_A", "train_noise": 0.3},
+          {"name": "Model_B", "train_noise": 0.0},
+          {"name": "Model_C", "train_noise": 0.3},
+      ]
+      RANDOM_SEEDS: List[int] = [42, 123, 987][:{{ num_seeds }}]
+
+      all_results = []
+      total_runs = len({{ model_configs_var }}) * len(RANDOM_SEEDS)
+      print(f"--- Starting Experimental Suite: {total_runs} total runs to execute ---")
+
+      # 2. Loop through every combination of model and seed
+      run_counter = 0
+      for seed in RANDOM_SEEDS:
+          for config in {{ model_configs_var }}:
+              run_counter += 1
+              print(f"\\n--- Running {run_counter}/{total_runs} ---")
+              
+              # 3. CRITICAL: Set the seed for reproducibility for this specific run
+              pl.seed_everything(seed, workers=True)
+              
+              # 4. Execute the training run
+              run_results = mock_training_run(
+                  model_name=config["name"],
+                  seed=seed,
+                  train_noise=config["train_noise"]
+              )
+              
+              # 5. Collect and store results in a structured format
+              all_results.append({
+                  "model": config["name"],
+                  "seed": seed,
+                  "train_noise": config["train_noise"],
+                  "test_accuracy": run_results["test_accuracy"]
+              })
+
+      # 6. Aggregate all results into a single DataFrame for analysis
+      {{ results_var_name }} = pd.DataFrame(all_results)
+      return {{ results_var_name }}
+
+  # --- Main Execution ---
+  if __name__ == "__main__":
+      final_results = run_experimental_suite()
+      print("\\n" + "="*60)
+      print("🎉 Experimental Suite Complete! 🎉")
+      print("="*60)
+      print("Aggregated Results:")
+      print(final_results.to_string())
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test that the orchestration function runs and produces a correctly shaped DataFrame
+      df = run_experimental_suite()
+      
+      num_models = len({{ model_configs_var }})
+      num_seeds_run = {{ num_seeds }}
+      
+      assert isinstance(df, pd.DataFrame), "Function did not return a pandas DataFrame."
+      assert len(df) == num_models * num_seeds_run, "DataFrame has an incorrect number of rows."
+      
+      expected_columns = ["model", "seed", "train_noise", "test_accuracy"]
+      assert all(col in df.columns for col in expected_columns), "DataFrame is missing expected columns."
+      
+      print("Experiment suite orchestration validation passed.")
