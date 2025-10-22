@@ -1,0 +1,121 @@
+plse_version: "2.0"
+pattern_id: "python_anti_pattern_not_using_slots"
+
+metadata:
+  author: "PLSE v2.0 Anti-Pattern Library"
+  description: |
+    Demonstrates the significant memory savings of using `__slots__` on classes
+    that will have many instances. This paired pattern contrasts the memory usage
+    of a standard class (with `__dict__`) against an optimized class that uses
+    a fixed set of attributes, a critical technique for data-intensive applications.
+  tags: [python, core-language, anti-pattern, performance, memory, class, slots, best-practice, optimization]
+  pedagogy:
+    concept: "Class Memory Optimization with __slots__"
+    difficulty: "intermediate"
+
+instruction: "{% if is_anti_pattern %}The following script creates many instances of a class, consuming a large amount of memory due to the overhead of `__dict__` on each instance. Explain this inefficiency and refactor the class to use `__slots__` for a significant memory reduction.{% else %}Write a memory-optimized Python class using `__slots__` to define a fixed set of attributes, and demonstrate its reduced memory footprint compared to a standard class when creating many instances.{% endif %}"
+
+parameters:
+  is_anti_pattern:
+    type: "bool"
+    description: "If true, generate the standard class. If false, generate the __slots__ optimized class."
+    default: true
+  num_instances:
+    type: "int"
+    description: "The number of class instances to create for the memory measurement."
+    default: 500_000
+  class_name:
+    type: "choice"
+    description: "The name of the class being defined."
+    default: "DataPoint"
+    constraints:
+      options: ["DataPoint", "Vector2D", "Particle"]
+
+requires:
+  - "tracemalloc"
+
+template: |
+  import tracemalloc
+
+  # --- 1. Class Definition ---
+  {% if is_anti_pattern %}
+  # --- ANTI-PATTERN: Standard class using __dict__ for attributes ---
+  class {{ class_name }}:
+      # Each instance of this class will have a `__dict__`, which is flexible
+      # but adds significant memory overhead, especially for many small objects.
+      def __init__(self, x: float, y: float, id: str):
+          self.x = x
+          self.y = y
+          self.id = id
+  {% else %}
+  # --- CORRECT PATTERN: Using __slots__ to save memory ---
+  class {{ class_name }}:
+      # By defining `__slots__`, we tell Python not to use a `__dict__`.
+      # Instead, it allocates space for a fixed set of attributes,
+      # which is far more memory-efficient.
+      __slots__ = ('x', 'y', 'id')
+
+      def __init__(self, x: float, y: float, id: str):
+          self.x = x
+          self.y = y
+          self.id = id
+  {% endif %}
+
+  # --- 2. Memory Usage Demonstration ---
+  def measure_memory_usage():
+      """Creates many instances of the class and measures memory usage."""
+      print(f"Creating {{ num_instances:, }} instances of {{ class_name }}...")
+      
+      tracemalloc.start()
+      
+      # Create a large number of instances
+      instances = [{{ class_name }}(i, i + 1, str(i)) for i in range({{ num_instances }})]
+      
+      current, peak = tracemalloc.get_traced_memory()
+      tracemalloc.stop()
+      
+      print(f"Current memory usage: {current / 1024**2:.2f} MiB")
+      print(f"Peak memory usage: {peak / 1024**2:.2f} MiB")
+      
+      # Keep instances in memory to show the final footprint
+      return instances
+
+  if __name__ == "__main__":
+      _ = measure_memory_usage()
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # This test validates that the class, whether standard or slotted,
+      # functions correctly for attribute assignment and retrieval.
+      
+      instance = {{ class_name }}(10.5, -5.0, "test_id")
+      
+      assert instance.x == 10.5
+      assert instance.y == -5.0
+      assert instance.id == "test_id"
+      
+      print("Functional validation passed: Attributes are correctly assigned and accessed.")
+    - |
+      # This test validates the core mechanism of __slots__.
+      # It checks for the presence or absence of the `__dict__` attribute.
+      import pytest
+      
+      instance = {{ class_name }}(0, 0, "0")
+      
+      {% if is_anti_pattern %}
+      # The standard class MUST have a __dict__
+      assert hasattr(instance, '__dict__'), "Standard class instance should have a __dict__."
+      instance.new_attr = "dynamic" # Should allow dynamic assignment
+      assert instance.new_attr == "dynamic"
+      print("Mechanism validation passed: __dict__ is present and allows dynamic attributes.")
+      {% else %}
+      # The slotted class MUST NOT have a __dict__
+      assert not hasattr(instance, '__dict__'), "Slotted class instance should not have a __dict__."
+      
+      # It should raise an AttributeError if we try to add a new attribute
+      with pytest.raises(AttributeError):
+          instance.new_attr = "this will fail"
+      print("Mechanism validation passed: __dict__ is absent and dynamic attributes are blocked.")
+      {% endif %}
