@@ -1,0 +1,131 @@
+plse_version: "2.0"
+pattern_id: "pytorch.lightning.base_model_experiment"
+
+metadata:
+  author: "PLSE v2.0 Core Library (from JANUS.ipynb)"
+  description: |
+    Demonstrates a powerful architectural pattern for conducting controlled ML experiments.
+    A base LightningModule defines all shared logic (training step, optimizer, etc.),
+    while child classes override only a specific component (the feature extractor)
+    to ensure a fair comparison.
+  tags: [pytorch, pytytorch-lightning, best-practice, architecture, experiment-design, inheritance]
+  pedagogy:
+    concept: "Abstract Base Class for ML Experiments"
+    difficulty: "advanced"
+
+instruction: "Create a PyTorch Lightning base class named `{{ base_class_name }}`. It should define a shared training step and optimizer. Then, create two child classes, `{{ child_a_name }}` and `{{ child_b_name }}`, that inherit from it and provide different implementations for the `feature_extractor`."
+
+parameters:
+  base_class_name:
+    type: "choice"
+    description: "The name of the base model class."
+    default: "BaseLitModel"
+    constraints:
+      options: ["BaseLitModel", "ExperimentBase", "ComparisonModule"]
+  child_a_name:
+    type: "choice"
+    description: "The name of the first concrete model class."
+    default: "ModelA"
+    constraints:
+      options: ["ModelA", "DeepFeatureModel", "HTLModel"]
+  child_b_name:
+    type: "choice"
+    description: "The name of the second concrete model class (the baseline)."
+    default: "ModelB"
+    constraints:
+      options: ["ModelB", "ShallowFeatureModel", "DenseModel"]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "pytorch_lightning as pl"
+  - "torch.optim as optim"
+
+template: |
+  class {{ base_class_name }}(pl.LightningModule):
+      """
+      A base LightningModule that defines shared architecture and logic.
+      Child classes are expected to define the `self.feature_extractor`.
+      """
+      def __init__(self, learning_rate: float = 1e-3):
+          super().__init__()
+          self.save_hyperparameters()
+
+          # Placeholder for the component that will be different in each child model.
+          self.feature_extractor = None
+
+          # Define the classifier head, which is IDENTICAL for all child models
+          # to ensure a fair comparison of the feature extractors.
+          self.classifier_head = nn.Sequential(
+              nn.Linear(128, 64),
+              nn.ReLU(),
+              nn.Linear(64, 10) # 10 output classes
+          )
+          self.criterion = nn.CrossEntropyLoss()
+
+      def forward(self, x: torch.Tensor) -> torch.Tensor:
+          if self.feature_extractor is None:
+              raise NotImplementedError("Child classes must define self.feature_extractor")
+          
+          # Flatten input and pass through the specific feature extractor
+          x = x.view(x.size(0), -1)
+          features = self.feature_extractor(x)
+          
+          # Pass features through the common classifier head
+          return self.classifier_head(features)
+
+      def training_step(self, batch, batch_idx):
+          x, y = batch
+          logits = self(x)
+          loss = self.criterion(logits, y)
+          self.log('train_loss', loss)
+          return loss
+
+      def configure_optimizers(self):
+          return optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+
+  # --- Specific Model Implementations ---
+
+  class {{ child_a_name }}({{ base_class_name }}):
+      """An implementation using a deeper feature extractor."""
+      def __init__(self, **kwargs):
+          super().__init__(**kwargs)
+          # Define the specific feature extractor for this model
+          self.feature_extractor = nn.Sequential(
+              nn.Linear(784, 256),
+              nn.ReLU(),
+              nn.Linear(256, 128),
+              nn.ReLU()
+          )
+
+  class {{ child_b_name }}({{ base_class_name }}):
+      """A baseline implementation using a simpler feature extractor."""
+      def __init__(self, **kwargs):
+          super().__init__(**kwargs)
+          # Define the specific feature extractor for this model
+          self.feature_extractor = nn.Sequential(
+              nn.Linear(784, 128),
+              nn.ReLU()
+          )
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test that the child classes inherit correctly and can be instantiated.
+      model_a = {{ child_a_name }}(learning_rate=0.01)
+      model_b = {{ child_b_name }}() # Uses default learning rate
+
+      assert isinstance(model_a, {{ base_class_name }})
+      assert isinstance(model_b, {{ base_class_name }})
+      
+      # Verify that the feature extractors are different
+      params_a = sum(p.numel() for p in model_a.feature_extractor.parameters())
+      params_b = sum(p.numel() for p in model_b.feature_extractor.parameters())
+      assert params_a != params_b
+
+      # Verify a forward pass works
+      dummy_input = torch.randn(4, 1, 28, 28) # MNIST-like batch
+      output = model_a(dummy_input)
+      assert output.shape == (4, 10)
+      print("Base model experiment pattern validated successfully.")
