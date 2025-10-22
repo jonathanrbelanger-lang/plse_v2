@@ -1,0 +1,127 @@
+plse_version: "2.0"
+pattern_id: "pytorch.training.custom_loss_function"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates how to implement a custom loss function in PyTorch, using Focal
+    Loss as an example. Focal Loss is designed to address class imbalance by
+    down-weighting the loss assigned to well-classified examples, allowing the
+    model to focus on hard-to-classify examples. This pattern shows both a
+    functional and a class-based (nn.Module) implementation.
+  tags: [pytorch, loss-function, class-imbalance, best-practice, advanced-training]
+  pedagogy:
+    concept: "Custom Loss Function Implementation"
+    difficulty: "advanced"
+
+instruction: "Implement the Focal Loss for multi-class classification as a `{{ implementation_style }}` in PyTorch. The implementation should accept `alpha` and `gamma` as parameters to control the weighting and focusing effect."
+
+parameters:
+  implementation_style:
+    type: "choice"
+    description: "The implementation style for the loss function."
+    default: "class"
+    constraints:
+      options: ["class", "function"]
+  gamma:
+    type: "choice"
+    description: "The focusing parameter (gamma > 0). Higher values give more weight to hard examples."
+    default: 2.0
+    constraints:
+      options: [2.0, 3.0, 5.0]
+  alpha:
+    type: "choice"
+    description: "The balancing parameter (alpha) for class weights."
+    default: 0.25
+    constraints:
+      options: [0.25, 0.5, 0.75]
+
+requires:
+  - "torch"
+  - "torch.nn as nn"
+  - "torch.nn.functional as F"
+
+template: |
+  import torch
+  import torch.nn as nn
+  import torch.nn.functional as F
+
+  {% if implementation_style == 'class' %}
+  # --- Class-based implementation (Best Practice) ---
+  class FocalLoss(nn.Module):
+      """
+      A custom Focal Loss implementation that inherits from nn.Module.
+      This is the recommended approach for creating reusable loss functions.
+      """
+      def __init__(self, alpha: float = {{ alpha }}, gamma: float = {{ gamma }}, reduction: str = 'mean'):
+          super(FocalLoss, self).__init__()
+          self.alpha = alpha
+          self.gamma = gamma
+          self.reduction = reduction
+
+      def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+          # Get the cross-entropy loss, but without any reduction
+          ce_loss = F.cross_entropy(logits, targets, reduction='none')
+          
+          # Get the probability of the correct class
+          pt = torch.exp(-ce_loss)
+          
+          # Calculate the Focal Loss
+          focal_loss = self.alpha * (1 - pt)**self.gamma * ce_loss
+          
+          if self.reduction == 'mean':
+              return focal_loss.mean()
+          elif self.reduction == 'sum':
+              return focal_loss.sum()
+          else:
+              return focal_loss
+
+  {% elif implementation_style == 'function' %}
+  # --- Functional implementation ---
+  def focal_loss_function(logits: torch.Tensor, targets: torch.Tensor, alpha: float = {{ alpha }}, gamma: float = {{ gamma }}) -> torch.Tensor:
+      """A functional implementation of Focal Loss."""
+      ce_loss = F.cross_entropy(logits, targets, reduction='none')
+      pt = torch.exp(-ce_loss)
+      focal_loss = alpha * (1 - pt)**gamma * ce_loss
+      return focal_loss.mean()
+
+  {% endif %}
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # --- Test the Focal Loss implementation ---
+      NUM_CLASSES = 5
+      BATCH_SIZE = 4
+      
+      # Create dummy logits and targets
+      logits = torch.randn(BATCH_SIZE, NUM_CLASSES)
+      targets = torch.randint(0, NUM_CLASSES, (BATCH_SIZE,))
+      
+      {% if implementation_style == 'class' %}
+      # Test the class-based implementation
+      loss_fn = FocalLoss(gamma={{ gamma }}, alpha={{ alpha }})
+      loss_val = loss_fn(logits, targets)
+      {% elif implementation_style == 'function' %}
+      # Test the functional implementation
+      loss_val = focal_loss_function(logits, targets, gamma={{ gamma }}, alpha={{ alpha }})
+      {% endif %}
+
+      # 1. Check that the loss is a valid scalar tensor
+      assert loss_val.ndim == 0, "Loss should be a scalar."
+      assert loss_val >= 0, "Loss should be non-negative."
+
+      # 2. Test a "perfectly confident, correct" case (loss should be near zero)
+      perfect_logits = torch.full((1, NUM_CLASSES), -10.0)
+      perfect_logits[0, 2] = 10.0 # Very confident in the correct class (2)
+      perfect_targets = torch.tensor([2])
+      
+      {% if implementation_style == 'class' %}
+      perfect_loss = loss_fn(perfect_logits, perfect_targets)
+      {% else %}
+      perfect_loss = focal_loss_function(perfect_logits, perfect_targets)
+      {% endif %}
+      assert perfect_loss < 1e-5, "Loss for a perfectly classified example should be near zero."
+      
+      print("Custom loss function validation passed.")
