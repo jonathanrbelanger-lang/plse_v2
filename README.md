@@ -1,43 +1,60 @@
 PLSE v2.0 is a synthetic code generation engine designed to create a high-quality, instruction-tuned dataset for training code-intelligent Large Language Models (LLMs).
 
-This project moves beyond scraping public code repositories. Instead, it treats the training dataset as a first-class product, engineered from the ground up to be **pedagogical, architecturally sound, and diverse**. The goal is to train LLMs that don't just write code, but understand how to write *good* code.
+This project moves beyond scraping public code repositories. Instead, it treats the training dataset as a first-class product, engineered from the ground up to be pedagogical, architecturally sound, and diverse. The goal is to train LLMs that don't just write code, but understand how to write good code.
 
-## Core Philosophy
+Core Philosophy
 
--   **Pedagogical by Design:** Every generated sample is a 'lesson' teaching a specific concept, from fundamental syntax to advanced architectural patterns.
--   **Quality-Driven Architecture:** A multi-stage validation pipeline ensures every generated sample is syntactically correct, stylistically compliant, and algorithmically sound.
--   **Combinatorial Generation:** A powerful Jinja2-based engine creates vast diversity from a small set of rich, modular patterns.
--   **Community-Ready and Scalable:** A modular, YAML-based pattern library that is easy to extend and maintain.
+Pedagogical by Design: Every generated sample is a 'lesson' teaching a specific concept, from fundamental syntax to advanced architectural patterns.
 
-## The Pattern Library: A Curriculum for Code Intelligence
+Quality-Driven Architecture: A multi-stage validation pipeline ensures every generated sample is syntactically correct, stylistically compliant, and algorithmically sound.
+
+Combinatorial Generation: A powerful Jinja2-based engine creates vast diversity from a small set of rich, modular patterns.
+
+Community-Ready and Scalable: A modular, YAML-based pattern library that is easy to extend and maintain.
+
+The Pattern Library: A Curriculum for Code Intelligence
 
 The heart of PLSE is its pattern library, a comprehensive curriculum designed to teach the breadth of modern Python development. The library is organized into distinct categories, each focusing on a different aspect of software engineering.
 
-### Current Pattern Categories:
+Current Pattern Categories:
 
-*   **Best Practices (`patterns/`):** These patterns serve as positive exemplars of high-quality, idiomatic code. They cover a wide range of topics, including:
-    *   **Core Python & Standard Library:** Idiomatic control flow, data structures, and effective use of modules like `collections` and `argparse`.
-    *   **Scientific Computing:** High-performance NumPy, SciPy, and data engineering techniques.
-    *   **Machine Learning:** Best practices for PyTorch and PyTorch Lightning, from model definition to full training workflows.
-    *   **Tradeoff Patterns:** A unique category of expert-level patterns that benchmark and explain the nuanced trade-offs between different architectural choices (e.g., `list` vs. `generator`, `threading` vs. `multiprocessing`).
+Best Practices (patterns/): These patterns serve as positive exemplars of high-quality, idiomatic code. They cover a wide range of topics, including:
 
-*   **Anti-Patterns (`patterns/anti_patterns/`):** This is a library of "paired patterns," where each YAML file can generate both a common programming mistake and its corrected, idiomatic solution. This teaches the LLM to identify, explain, and refactor suboptimal code. It covers:
-    *   **Critical Sins:** Foundational bugs like mutable default arguments and data leakage.
-    *   **Intermediate Mistakes:** Performance and memory inefficiencies.
-    *   **Expert Blind Spots:** Subtle MLOps and production issues like training-serving skew.
+Core Python & Standard Library: Idiomatic control flow, data structures, and effective use of modules like collections and argparse.
 
-*   **Orchestration Patterns (`patterns/orchestration/`):** These patterns teach system-level architecture by generating complete, runnable scripts and project artifacts. They move beyond code snippets to teach how software systems are built and deployed. This includes:
-    *   **ML Pipeline Scripts:** Generating `train.py`, `predict.py`, and `evaluate.py`.
-    *   **API Servers:** Creating production-ready FastAPI services.
-    *   **DevOps & MLOps Artifacts:** Generating `Dockerfile`s, `pyproject.toml` files, and `docker-compose.yml` for multi-service applications.
+Scientific Computing: High-performance NumPy, SciPy, and data engineering techniques.
 
-*   **Meta-Patterns (`patterns/`):** A special pattern that teaches the LLM the PLSE schema itself, enabling a flywheel effect where the model can assist in its own data generation.
+Machine Learning: Best practices for PyTorch and PyTorch Lightning, from model definition to full training workflows.
 
-### Discovering Available Patterns
+Tradeoff Patterns: A unique category of expert-level patterns that benchmark and explain the nuanced trade-offs between different architectural choices (e.g., list vs. generator, threading vs. multiprocessing).
+
+Anti-Patterns (patterns/anti_patterns/): This is a library of "paired patterns," where each YAML file can generate both a common programming mistake and its corrected, idiomatic solution. This teaches the LLM to identify, explain, and refactor suboptimal code. It covers:
+
+Critical Sins: Foundational bugs like mutable default arguments and data leakage.
+
+Intermediate Mistakes: Performance and memory inefficiencies.
+
+Expert Blind Spots: Subtle MLOps and production issues like training-serving skew.
+
+Orchestration Patterns (patterns/orchestration/): These patterns teach system-level architecture by generating complete, runnable scripts and project artifacts. They move beyond code snippets to teach how software systems are built and deployed. This includes:
+
+ML Pipeline Scripts: Generating train.py, predict.py, and evaluate.py.
+
+API Servers: Creating production-ready FastAPI services.
+
+DevOps & MLOps Artifacts: Generating Dockerfiles, pyproject.toml files, and docker-compose.yml for multi-service applications.
+
+Meta-Patterns (patterns/): A special pattern that teaches the LLM the PLSE schema itself, enabling a flywheel effect where the model can assist in its own data generation.
+
+Discovering Available Patterns
 
 To see a full, up-to-date catalog of all available patterns, you can run our discovery script:
 
-```bash
+code
+Bash
+download
+content_copy
+expand_less
 # Print a list of all patterns to the console
 python scripts/list_patterns.py
 
