@@ -1,0 +1,98 @@
+plse_version: "2.0"
+pattern_id: "python.core.structured_error_handling"
+
+metadata:
+  author: "PLSE v2.0 Core Library"
+  description: |
+    Demonstrates the full `try...except...else...finally` structure for robust
+    error handling in Python. This pattern shows how to catch specific exceptions,
+    run code only when no exception occurs (else), and guarantee that cleanup
+    code always runs (finally).
+  tags: [python, core-language, error-handling, exceptions, try-except, best-practice]
+  pedagogy:
+    concept: "Structured Exception Handling"
+    difficulty: "intermediate"
+
+instruction: "Write a Python function named `{{ func_name }}` that safely divides two numbers. The function must use a full `try...except...else...finally` block to handle potential `ZeroDivisionError` and `TypeError` exceptions, and print a message in each block to demonstrate the control flow."
+
+parameters:
+  func_name:
+    type: "choice"
+    description: "The name of the safe division function."
+    default: "safe_divide"
+    constraints:
+      options: ["safe_divide", "robust_division", "guarded_divide"]
+  numerator_var:
+    type: "choice"
+    description: "The variable name for the numerator."
+    default: "numerator"
+    constraints:
+      options: ["numerator", "dividend", "a"]
+  denominator_var:
+    type: "choice"
+    description: "The variable name for the denominator."
+    default: "denominator"
+    constraints:
+      options: ["denominator", "divisor", "b"]
+
+requires: []
+
+template: |
+  def {{ func_name }}({{ numerator_var }}, {{ denominator_var }}):
+      """
+      Safely divides two numbers and demonstrates the full try/except block.
+      """
+      print(f"\\n--- Attempting to divide { {{ numerator_var }} } by { {{ denominator_var }} } ---")
+      result = None
+      try:
+          print("  -> Inside the 'try' block. Attempting division...")
+          result = {{ numerator_var }} / {{ denominator_var }}
+      
+      except ZeroDivisionError as e:
+          print(f"  -> Caught a specific error: ZeroDivisionError!")
+          print(f"     Error message: {e}")
+      
+      except TypeError as e:
+          print(f"  -> Caught a different specific error: TypeError!")
+          print(f"     Error message: {e}")
+      
+      else:
+          # The 'else' block runs ONLY if the 'try' block completes without errors.
+          print(f"  -> Inside the 'else' block. Division was successful.")
+          print(f"     Result: {result}")
+      
+      finally:
+          # The 'finally' block runs NO MATTER WHAT: success, caught error, or uncaught error.
+          # It's used for guaranteed cleanup (e.g., closing files or network connections).
+          print("  -> Inside the 'finally' block. Operation finished.")
+      
+      return result
+
+  # --- Example Usage ---
+  if __name__ == "__main__":
+      # 1. A successful case
+      {{ func_name }}(10, 2)
+      
+      # 2. A case that will raise a ZeroDivisionError
+      {{ func_name }}(10, 0)
+      
+      # 3. A case that will raise a TypeError
+      {{ func_name }}(10, "a")
+
+validation:
+  linter_checks: true
+  unit_test_snippets:
+    - |
+      # Test the successful case
+      res_success = {{ func_name }}(100, 5)
+      assert res_success == 20, "Function returned incorrect result for valid inputs."
+
+      # Test the ZeroDivisionError case
+      res_zero_div = {{ func_name }}(100, 0)
+      assert res_zero_div is None, "Function should return None on ZeroDivisionError."
+
+      # Test the TypeError case
+      res_type_error = {{ func_name }}(100, "five")
+      assert res_type_error is None, "Function should return None on TypeError."
+      
+      print("Structured error handling validation passed.")
