@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+authors:
+  - family-names: "Belanger"
+    given-names: "Jonathan"
+    # orcid: "https://orcid.org/0009-0005-9909-4063" # Optional
+title: "PLSE v2.0: A Combinatorial Engine for Synthetic Code Generation"
+version: 2.0.0
+date-released: 2025-10-21
+repository-code: "https://github.com/jonathanrbelanger-lang/plse_v2"
+license: MIT
