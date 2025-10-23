@@ -16,31 +16,46 @@ try:
     from src.plse.generator import PLSEGenerator
     from src.plse.validation import SyntaxValidator, Flake8Validator
     from src.plse.patterns import PLSEPattern
+    from src.plse.schema import PLSEPatternSchema # Import the Pydantic schema
 except ImportError as e:
     print(f"FATAL: Could not import PLSE modules. Ensure you have run 'pip install -e .'. Error: {e}")
     sys.exit(1)
 
 # This function must be at the top level to be pickleable by multiprocessing
 def check_single_pattern(pattern_dict: Dict) -> Tuple[str, List[str]]:
-    """Worker function to generate and validate a single pattern."""
+    """
+    Worker function to generate and validate a single pattern.
+    Receives a dictionary and correctly reconstructs the nested PLSEPattern object.
+    """
     generator = PLSEGenerator()
     validators = [SyntaxValidator(), Flake8Validator()]
-    pattern = PLSEPattern(**pattern_dict) # Reconstruct from dict
     errors: List[str] = []
-    
-    generation_result = generator.generate(pattern)
-    
-    if not generation_result:
-        return pattern.pattern_id, ["Generation failed (e.g., Jinja error)."]
+    pattern_id = pattern_dict.get("pattern_id", "unknown_pattern")
+
+    try:
+        # --- BUG FIX: Properly reconstruct the nested dataclass object ---
+        # 1. Load the dict into the Pydantic schema for validation.
+        schema = PLSEPatternSchema(**pattern_dict)
+        # 2. Use our trusted factory method to build the full object.
+        pattern = PLSEPattern.from_schema(schema)
         
-    code, _, _ = generation_result
-    
-    for validator in validators:
-        result = validator.validate(code)
-        if not result.valid:
-            errors.extend(result.errors)
+        generation_result = generator.generate(pattern)
+        
+        if not generation_result:
+            return pattern.pattern_id, ["Generation failed (e.g., Jinja error)."]
             
-    return pattern.pattern_id, errors
+        code, _, _ = generation_result
+        
+        for validator in validators:
+            result = validator.validate(code)
+            if not result.valid:
+                errors.extend(result.errors)
+                
+        return pattern.pattern_id, errors
+    except Exception as e:
+        # Catch any unexpected errors during reconstruction or validation
+        return pattern_id, [f"Worker process failed: {type(e).__name__}: {e}"]
+
 
 def analyze_and_suggest_fixes(pattern_id: str, errors: List[str]):
     """Analyzes errors and provides actionable suggestions."""
