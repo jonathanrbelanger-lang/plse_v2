@@ -1,16 +1,16 @@
 [build-system]
-
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "plse"
 version = "2.0.0"
-description = "A modern synthetic code generation engine for LLM training."
+description = "Python Latent Space Explorer v2.0"
 authors = [
-  { name = "Jonathan R Belanger", email = "jonathan.r.belanger@gmail.com" },
+  { name = "Jonathan Belanger", email = "jonathan.r.belanger@gmail.com" },
 ]
-requires-python = ">=3.8"
+readme = "README.md"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -30,12 +30,13 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "python-multipart",
-    "Pillow", # Note: The PIL requirement is met by the Pillow package
+    "Pillow",
     "joblib",
     "toml",
-    "pytest"
+    "pytest",
+    "tqdm"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/jonathanrbelanger-lang/plse_v2"
-"Bug Tracker" = "https://github.com/jonathanrbelanger-lang/plse_v2/issues"
+Homepage = "https://github.com/jonathanrbelanger-lang/plse-v2"
+"Bug Tracker" = "https://github.com/jonathanrbelanger-lang/plse-v2/issues"
