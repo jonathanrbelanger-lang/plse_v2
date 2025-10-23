@@ -2,7 +2,7 @@ plse_version: "2.0"
 pattern_id: "python.scientific.pso_joblib"
 
 metadata:
-  author: "PLSE v2.0 Core Library (from DefTrinHTLCompr.ipynb)"
+  author: "PLSE v2.0 Core Library"
   description: |
     Demonstrates a high-performance Particle Swarm Optimizer (PSO) that uses
     NumPy for vectorized operations and the 'joblib' library for parallel
@@ -39,6 +39,9 @@ requires:
   - "numpy as np"
   - "from joblib import Parallel, delayed"
   - "import os"
+  - "pandas as pd"
+  - "seaborn as sns"
+  - "matplotlib.pyplot as plt"
 
 template: |
   # Define an objective function for the optimizer to solve
