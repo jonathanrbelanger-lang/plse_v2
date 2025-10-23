@@ -33,25 +33,24 @@ First, clone the repository and navigate into the project directory.
 # Replace with your repository's URL
 git clone https://github.com/your-username/plse-v2.git
 cd plse-v2
-
-'''
+```
 
 Next, create a virtual environment and install the project in editable mode. This will install all necessary dependencies from pyproject.toml.
 
-'''bash
+```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -e .
-'''
+```
 
 3. Run the Generation Engine
 
 Execute the main script to start the dataset generation process.
 
 
-'''bash
+```bash
 python main.py
-'''
+```
 
 The script will discover all patterns, initialize the engine, and begin generating examples. By default, it will create 100 examples and save them to training_dataset.jsonl.
 
@@ -60,15 +59,15 @@ The script will discover all patterns, initialize the engine, and begin generati
 You can inspect the generated dataset using standard command-line tools. To pretty-print the first example, you can use a tool like jq.
 
 
-'''bash
+```bash
 # (Optional) Install jq if you don't have it
 # sudo apt-get install jq
-'''
+```
 
-'''bash
+```bash
 # Inspect the first line of the output file
 head -n 1 training_dataset.jsonl | jq .
-'''
+```
 
 # Project Architecture
 
@@ -106,9 +105,9 @@ As a contributor to PLSE, your primary workflows will involve creating patterns 
 
 To run the full generation pipeline, simply execute main.py. You can configure the number of examples and the output file directly in the script.
 
-'''bash
+```bash
 python main.py
-'''
+```
 
 # Discovering & Linting Patterns
 
@@ -116,18 +115,18 @@ We have two key utility scripts in the /scripts directory to help manage the pat
 
 List All Available Patterns: To get a quick overview of all patterns in the library without crawling the directories, run:
 
-'''bash
+```bash
 python scripts/list_patterns.py
-'''
+```
 
 To generate a AVAILABLE_PATTERNS.md file, use the --output-markdown flag.
 
 Lint the Pattern Library: To check all patterns for static errors (like flake8 violations in the generated code), run our high-performance parallel linter:
 
 
-'''bash
+```bash
 python scripts/lint_patterns.py
-'''
+```
 
 This tool will provide a summary of any patterns that need to be fixed.
 
