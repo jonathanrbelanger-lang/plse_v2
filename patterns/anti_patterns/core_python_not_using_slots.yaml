@@ -33,7 +33,8 @@ parameters:
 
 requires:
   - "tracemalloc"
-
+  - "pytest" # For the validation snippet
+  
 template: |
   import tracemalloc
 
