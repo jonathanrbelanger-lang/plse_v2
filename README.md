@@ -61,7 +61,7 @@ You can inspect the generated dataset using standard command-line tools. To pret
 
 ```bash
 # (Optional) Install jq if you don't have it
-# sudo apt-get install jq
+sudo apt-get install jq
 ```
 
 ```bash
