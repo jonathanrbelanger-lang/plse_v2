@@ -38,7 +38,7 @@ cd plse-v2
 Next, create a virtual environment and install the project in editable mode. This will install all necessary dependencies from pyproject.toml.
 
 ```bash
-python3 -m venv venv
+python3 -m venv .venv
 source venv/bin/activate
 pip install -e .
 ```
