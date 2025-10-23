@@ -1,6 +1,6 @@
 """
-Defines the multi-stage validation pipeline for ensuring the quality of
-generated code. This version supports both Python and shell execution for tests.
+Defines the multi-stage validation pipeline. This version uses our new
+custom, CST-based linter instead of the generic flake8.
 """
 
 import ast
@@ -12,7 +12,8 @@ from abc import ABC, abstractmethod
 from typing import List
 from dataclasses import dataclass, field
 
-from flake8.api import legacy as flake8
+# Import our new custom linter
+from .linter import CustomLinter
 
 @dataclass
 class ValidationResult:
@@ -33,34 +34,23 @@ class SyntaxValidator(BaseValidator):
         except SyntaxError as e:
             return ValidationResult(False, code, [f"Syntax error on line {e.lineno}: {e.msg}"])
 
-class Flake8Validator(BaseValidator):
+class CustomLinterValidator(BaseValidator):
     """
-    Validates code against PEP 8 style conventions using Flake8.
+    A validator that uses our domain-specific, CST-based linter engine.
+    This replaces the old Flake8Validator.
     """
     def __init__(self):
-        # Ignore non-critical style warnings to reduce noise
-        ignore_codes = ['E501', 'W292', 'F841', 'E402', 'E302', 'E305', 'W293']
-        self.style_guide = flake8.get_style_guide(ignore=ignore_codes)
+        self.linter = CustomLinter()
 
     def validate(self, code: str, **kwargs) -> ValidationResult:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as f:
-            f.write(code)
-            filepath = f.name
-        
-        report = self.style_guide.check_files([filepath])
-        os.remove(filepath)
-        
-        if report.total_errors == 0:
+        violations = self.linter.run(code)
+        if not violations:
             return ValidationResult(True, code)
         else:
-            # --- BUG FIX: Revert to the correct API for getting errors ---
-            # The report object does not have an '.errors' attribute.
-            # The correct method is .get_statistics('').
-            errors = [f"Flake8: {e}" for e in report.get_statistics('')]
+            errors = [f"Linter ({v.code} at L{v.line}:{v.column}): {v.message}" for v in violations]
             return ValidationResult(False, code, errors)
 
-# ... (The rest of the file is unchanged and correct) ...
-
+# ... (The SafeExecutionValidator and its helper function remain unchanged) ...
 def _execute_python_in_process(code: str, queue: multiprocessing.Queue):
     try:
         exec(code, {"__builtins__": __builtins__})
@@ -124,7 +114,10 @@ class SafeExecutionValidator(BaseValidator):
 
 class ValidationPipeline:
     def __init__(self, use_pylint: bool = False):
-        self.static_validators: List[BaseValidator] = [SyntaxValidator(), Flake8Validator()]
+        self.static_validators: List[BaseValidator] = [
+            SyntaxValidator(),
+            CustomLinterValidator() # Replaced Flake8Validator
+        ]
         self.execution_validator = SafeExecutionValidator()
 
     def validate(self, code: str, tests: List[str]) -> ValidationResult:
