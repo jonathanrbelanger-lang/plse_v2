@@ -31,7 +31,7 @@ First, clone the repository and navigate into the project directory.
 
 ```bash
 # Replace with your repository's URL
-git clone https://github.com/your-username/plse-v2.git
+git clone https://github.com/jonathanrbelanger-lang/plse-v2.git
 cd plse-v2
 ```
 
