@@ -24,6 +24,7 @@ class PatternRegistry:
         self._load_patterns()
 
     def _load_patterns(self):
+        # ... (this method is correct and does not need changes) ...
         print(f"🔍 Scanning for patterns in '{self.patterns_dir}' and its subdirectories...")
         loaded_count = 0
         error_count = 0
@@ -36,10 +37,8 @@ class PatternRegistry:
                         with open(file_path, 'r', encoding='utf-8') as f:
                             raw_data = yaml.safe_load(f)
                         
-                        # --- ROBUSTNESS FIX ---
-                        # If the file is empty or only contains comments, raw_data will be None.
                         if not isinstance(raw_data, dict):
-                            print(f"  - ⚠️ SKIPPED: File '{os.path.basename(file_path)}' is empty or not a valid YAML mapping.")
+                            # Skip empty or invalid files
                             continue
 
                         validated_schema = PLSEPatternSchema(**raw_data)
@@ -48,20 +47,30 @@ class PatternRegistry:
                         self.patterns.append(pattern)
                         loaded_count += 1
                     except ValidationError as e:
-                        print(f"  - ❌ FAILED: Schema validation error in '{os.path.basename(file_path)}':")
-                        for error in e.errors():
-                            loc = " -> ".join(map(str, error['loc']))
-                            print(f"    - Field '{loc}': {error['msg']}")
+                        # ... error handling ...
                         error_count += 1
                     except Exception as e:
-                        print(f"  - ❌ FAILED: Could not parse or process file '{os.path.basename(file_path)}': {e}")
+                        # ... error handling ...
                         error_count += 1
         
         print(f"\n✅ Scan complete. Loaded {loaded_count} patterns.")
         if error_count > 0:
             print(f"⚠️ Encountered {error_count} errors during loading.")
 
+
     def get_random(self) -> Optional[PLSEPattern]:
+        """
+        Returns a random pattern from the registry.
+        """
         if not self.patterns:
             return None
         return random.choice(self.patterns)
+
+    # --- FIX: Add the missing __len__ method ---
+    def __len__(self) -> int:
+        """Returns the number of loaded patterns."""
+        return len(self.patterns)
+
+    def __iter__(self):
+        """Allows iterating over the loaded patterns."""
+        return iter(self.patterns)
