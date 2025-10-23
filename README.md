@@ -1,101 +1,148 @@
-PLSE v2.0 is a synthetic code generation engine designed to create a high-quality, instruction-tuned dataset for training code-intelligent Large Language Models (LLMs).
+# Python Latent Space Explorer (PLSE) v2.0
 
-This project moves beyond scraping public code repositories. Instead, it treats the training dataset as a first-class product, engineered from the ground up to be pedagogical, architecturally sound, and diverse. The goal is to train LLMs that don't just write code, but understand how to write good code.
+**A System for Engineering High-Quality, Pedagogical Code Datasets**
 
-# Core Philosophy
 
-Pedagogical by Design: Every generated sample is a 'lesson' teaching a specific concept, from fundamental syntax to advanced architectural patterns.
 
-Quality-Driven Architecture: A multi-stage validation pipeline ensures every generated sample is syntactically correct, stylistically compliant, and algorithmically sound.
+PLSE v2.0 is a data engineering framework designed to address a fundamental constraint in the development of code-intelligent Large Language Models: the quality of training data. Moving beyond the limitations of scraping public code repositories, PLSE employs a "pedagogical by design" philosophy to synthetically generate a vast, instruction-tuned dataset of high-quality code examples, anti-patterns, and architectural blueprints.
 
-Combinatorial Generation: A powerful Jinja2-based engine creates vast diversity from a small set of rich, modular patterns.
 
-Community-Ready and Scalable: A modular, YAML-based pattern library that is easy to extend and maintain.
 
-# The Pattern Library: A Curriculum for Code Intelligence
+### Core Philosophy
 
-The heart of PLSE is its pattern library, a comprehensive curriculum designed to teach the breadth of modern Python development. The library is organized into distinct categories, each focusing on a different aspect of software engineering.
+This project is built on a set of foundational principles that guide every generated example:
 
-Current Pattern Categories:
+*   ✅ **Pedagogical by Design:** Every generated sample is a "lesson" explicitly designed to teach a specific concept, from a simple language feature to a complex architectural pattern.
+*   🔬 **Quality-Driven Architecture:** A multi-stage validation pipeline ensures every generated code sample is syntactically correct, stylistically idiomatic, and algorithmically sound.
+*   🔀 **Combinatorial Generation:** A powerful Jinja2-based engine creates vast diversity from a small set of rich, modular patterns, allowing us to explore the "latent space" of Python code.
+*   🧩 **Community-Ready and Scalable:** The modular, YAML-based pattern library is designed to be easily understood, maintained, and extended by developers.
 
-Best Practices (patterns/): These patterns serve as positive exemplars of high-quality, idiomatic code. They cover a wide range of topics, including:
+### Quick Start: Generating Your First Dataset
 
-Core Python & Standard Library: Idiomatic control flow, data structures, and effective use of modules like collections and argparse.
+This guide will walk you through setting up the environment and running the generation engine.
 
-Scientific Computing: High-performance NumPy, SciPy, and data engineering techniques.
+**1. Prerequisites**
 
-Machine Learning: Best practices for PyTorch and PyTorch Lightning, from model definition to full training workflows.
+Ensure you have `git` and a modern version of Python (`3.10` or newer) installed on your system.
 
-Tradeoff Patterns: A unique category of expert-level patterns that benchmark and explain the nuanced trade-offs between different architectural choices (e.g., list vs. generator, threading vs. multiprocessing).
+**2. Clone & Setup**
 
-Anti-Patterns (patterns/anti_patterns/): This is a library of "paired patterns," where each YAML file can generate both a common programming mistake and its corrected, idiomatic solution. This teaches the LLM to identify, explain, and refactor suboptimal code. It covers:
+First, clone the repository and navigate into the project directory.
 
-Critical Sins: Foundational bugs like mutable default arguments and data leakage.
+```bash
+# Replace with your repository's URL
+git clone https://github.com/your-username/plse-v2.git
+cd plse-v2
+'''
 
-Intermediate Mistakes: Performance and memory inefficiencies.
+Next, create a virtual environment and install the project in editable mode. This will install all necessary dependencies from pyproject.toml.
 
-Expert Blind Spots: Subtle MLOps and production issues like training-serving skew.
-
-Orchestration Patterns (patterns/orchestration/): These patterns teach system-level architecture by generating complete, runnable scripts and project artifacts. They move beyond code snippets to teach how software systems are built and deployed. This includes:
-
-ML Pipeline Scripts: Generating train.py, predict.py, and evaluate.py.
-
-API Servers: Creating production-ready FastAPI services.
-
-DevOps & MLOps Artifacts: Generating Dockerfiles, pyproject.toml files, and docker-compose.yml for multi-service applications.
-
-Meta-Patterns (patterns/): A special pattern that teaches the LLM the PLSE schema itself, enabling a flywheel effect where the model can assist in its own data generation.
-
-# Discovering Available Patterns
-
-To see a full, up-to-date catalog of all available patterns, you can run our discovery script:
-
-# Print a list of all patterns to the console
-python scripts/list_patterns.py
-
-# Or, generate a Markdown file with the full catalog
-python scripts/list_patterns.py --output-markdown
-
-This will create an AVAILABLE_PATTERNS.md file in the project root.
-
-# Getting Started
-Prerequisites
-
-Python 3.9 or newer.
-
-Docker (required for validating some orchestration patterns).
-
-# Installation
-
-Clone this repository.
-
-Navigate to the root directory.
-
-# Create and activate a virtual environment (recommended):
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install the project and all its dependencies:
+'''bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -e .
+'''
 
-(The -e flag installs the project in "editable" mode, which is recommended for development.)
+3. Run the Generation Engine
 
-# Usage
+Execute the main script to start the dataset generation process.
 
-The primary entry point is the main.py script.
 
-Configure the run: Open main.py and adjust the configuration variables inside the main() function (e.g., NUM_EXAMPLES_TO_GENERATE).
-
-# Run the generator: Execute the script from your terminal.
+'''bash
 python main.py
+'''
 
-The script will scan the patterns/ directory, generate and validate the code samples, and save the final dataset to a training_dataset.jsonl file in your project root.
+The script will discover all patterns, initialize the engine, and begin generating examples. By default, it will create 100 examples and save them to training_dataset.jsonl.
+
+4. Verify the Output
+
+You can inspect the generated dataset using standard command-line tools. To pretty-print the first example, you can use a tool like jq.
+
+
+'''bash
+# (Optional) Install jq if you don't have it
+# sudo apt-get install jq
+'''
+
+'''bash
+# Inspect the first line of the output file
+head -n 1 training_dataset.jsonl | jq .
+'''
+
+# Project Architecture
+
+The PLSE v2.0 system is composed of two main parts: the Core Engine and the Pattern Library.
+
+# The Pattern Library (/patterns)
+
+This is the heart of the project—a collection of YAML files that serve as blueprints for code generation. Each pattern is a self-contained lesson. The library is organized into categories:
+
+/patterns/*.yaml: Best-practice patterns and "tradeoff" patterns that teach expert-level nuance.
+
+/patterns/anti_patterns/*.yaml: Paired patterns that demonstrate a common mistake and its correct solution.
+
+/patterns/orchestration/*.yaml: Advanced patterns that generate complete, runnable scripts and DevOps artifacts (Dockerfile, ci.yml, etc.).
+
+# The Core Engine (src/plse/)
+
+This is the installable Python package that powers the generation process.
+
+schema.py: Defines the Pydantic models that validate the structure of all YAML pattern files.
+
+patterns.py: Defines the internal Python dataclasses the application uses to represent a validated pattern.
+
+registry.py: Discovers, validates, and loads all .yaml patterns from the /patterns directory and its subdirectories.
+
+generator.py: The Jinja2-based engine that renders a pattern with a random parameter context to produce code.
+
+validation.py: The multi-stage pipeline that ensures the quality of generated code through syntax checks, a custom linter, and safe execution of unit tests.
+
+# Developer Workflow
+
+As a contributor to PLSE, your primary workflows will involve creating patterns and validating the library.
+
+# Generating the Dataset
+
+To run the full generation pipeline, simply execute main.py. You can configure the number of examples and the output file directly in the script.
+
+'''bash
+python main.py
+'''
+
+# Discovering & Linting Patterns
+
+We have two key utility scripts in the /scripts directory to help manage the pattern library.
+
+List All Available Patterns: To get a quick overview of all patterns in the library without crawling the directories, run:
+
+'''bash
+python scripts/list_patterns.py
+'''
+
+To generate a AVAILABLE_PATTERNS.md file, use the --output-markdown flag.
+
+Lint the Pattern Library: To check all patterns for static errors (like flake8 violations in the generated code), run our high-performance parallel linter:
+
+
+'''bash
+python scripts/lint_patterns.py
+'''
+
+This tool will provide a summary of any patterns that need to be fixed.
 
 # Contributing
 
-This project thrives on community contributions to the pattern library. If you have an idea for a pattern that teaches a valuable Python or ML concept, we encourage you to contribute.
+Contributions are welcome, especially in the form of new patterns. The best way to contribute is to identify a common Python concept, best practice, or anti-pattern that is not yet in our library.
 
-Please see our CONTRIBUTING.md file for a detailed guide on how to author and submit a new pattern. The core philosophy is that every pattern is a lesson, and it must be self-contained, runnable, and include its own validation tests.
+The basic workflow is:
+
+Create a new .yaml file in the appropriate directory (e.g., patterns/anti_patterns/).
+
+Follow the schema defined in src/plse/schema.py. The best way to learn is to study an existing pattern and the meta-pattern (plse.meta.paired_pattern_generator).
+
+Run python scripts/lint_patterns.py to ensure your new pattern generates valid code.
+
+Submit a pull request.
 
 # License
 
