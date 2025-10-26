@@ -1,6 +1,6 @@
 """
-Enhanced validation pipeline that pre-renders Jinja2 templates before linting.
-This eliminates false positive F821 errors for template variables.
+Enhanced validation pipeline with Jinja2 template pre-rendering.
+This eliminates F821 false positives for template variables.
 """
 
 import ast
@@ -11,11 +11,9 @@ import multiprocessing
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
 from dataclasses import dataclass, field
-from jinja2 import Environment
+from jinja2 import Environment, TemplateSyntaxError
 
-# Import our custom linter
 from .linter import CustomLinter
-from .patterns import PLSEPattern
 
 @dataclass
 class ValidationResult:
@@ -37,9 +35,6 @@ class SyntaxValidator(BaseValidator):
             return ValidationResult(False, code, [f"Syntax error on line {e.lineno}: {e.msg}"])
 
 class CustomLinterValidator(BaseValidator):
-    """
-    A validator that uses our domain-specific, CST-based linter engine.
-    """
     def __init__(self):
         self.linter = CustomLinter()
 
@@ -114,77 +109,60 @@ class SafeExecutionValidator(BaseValidator):
                 os.remove(script_path)
 
 class ValidationPipeline:
-    """
-    Enhanced validation pipeline that handles Jinja2 templates correctly.
-    """
-    def __init__(self):
+    def __init__(self, use_pylint: bool = False):
         self.static_validators: List[BaseValidator] = [
             SyntaxValidator(),
             CustomLinterValidator()
         ]
         self.execution_validator = SafeExecutionValidator()
+        # NEW: Jinja2 environment for template rendering
         self.jinja_env = Environment(trim_blocks=True, lstrip_blocks=True)
 
-    def _render_template_with_defaults(self, code: str, parameters: Dict[str, Any]) -> str:
+    def _render_template_with_defaults(self, template_str: str, parameters: Dict[str, Any]) -> str:
         """
-        Renders Jinja2 template variables with their default values.
+        Renders Jinja2 template variables with their default parameter values.
         This ensures linting sees valid Python code, not template syntax.
+        
+        Args:
+            template_str: Code string potentially containing {{ var }} expressions
+            parameters: Dict mapping parameter names to Parameter objects
+        
+        Returns:
+            Rendered code string with all template variables substituted
         """
+        # Build context from parameter defaults
         context = {}
         for name, param in parameters.items():
-            default = param.default
-            # For string defaults, ensure they're properly quoted in the rendered code
-            if isinstance(default, str) and param.type == "choice":
-                context[name] = default
-            else:
-                context[name] = default
+            context[name] = param.default
         
         try:
-            template = self.jinja_env.from_string(code)
+            template = self.jinja_env.from_string(template_str)
             return template.render(context)
+        except TemplateSyntaxError as e:
+            # If template has syntax errors, return original and let validation catch it
+            return template_str
         except Exception as e:
-            # If template rendering fails, return original code and let validation catch it
-            print(f"Warning: Template rendering failed: {e}")
-            return code
+            # Any other rendering errors, return original
+            return template_str
 
-    def validate_pattern(self, pattern: PLSEPattern) -> ValidationResult:
+    def validate(self, code: str, tests: List[str] = [], parameters: Dict[str, Any] = None) -> ValidationResult:
         """
-        Validates a PLSEPattern by rendering it with default parameters first.
-        This is the main entry point for pattern validation.
-        """
-        # Assemble the full code template
-        components = pattern.components
-        code_parts = filter(None, [
-            components.imports,
-            components.data_setup,
-            components.training_loop,
-            components.evaluation,
-            components.model_definition
-        ])
-        full_template_str = "\n\n".join(code_parts)
+        Standard validation pipeline. Now with optional template rendering.
         
-        # Render with default parameter values
-        rendered_code = self._render_template_with_defaults(
-            full_template_str, 
-            pattern.parameters or {}
-        )
-        
-        # Also render test snippets
-        rendered_tests = []
-        for test in pattern.validation.unit_test_snippets:
-            rendered_test = self._render_template_with_defaults(
-                test,
-                pattern.parameters or {}
-            )
-            rendered_tests.append(rendered_test)
-        
-        # Now run the standard validation pipeline on rendered code
-        return self.validate(rendered_code, rendered_tests)
-
-    def validate(self, code: str, tests: List[str] = []) -> ValidationResult:
+        Args:
+            code: The code to validate (may contain Jinja2 templates)
+            tests: Unit test snippets to run
+            parameters: Optional dict of Parameter objects for template rendering
         """
-        Standard validation for already-rendered code.
-        """
+        # NEW: Pre-render templates if parameters are provided
+        if parameters:
+            code = self._render_template_with_defaults(code, parameters)
+            # Also render test snippets
+            rendered_tests = []
+            for test in tests:
+                rendered_tests.append(self._render_template_with_defaults(test, parameters))
+            tests = rendered_tests
+        
         # Run static validators
         for validator in self.static_validators:
             result = validator.validate(code=code)
@@ -192,28 +170,4 @@ class ValidationPipeline:
                 return result
         
         # Run execution validator
-        return self.execution_validator.validate(code=code, tests=tests)            result = subprocess.run(final_command, shell=True, capture_output=True, text=True, timeout=self.timeout + 5)
-            if result.returncode != 0:
-                error_msg = f"Shell command failed with exit code {result.returncode}.\\nSTDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
-                return ValidationResult(False, code_content, [error_msg])
-            return ValidationResult(True, code_content)
-        except subprocess.TimeoutExpired:
-            return ValidationResult(False, code_content, [f"Shell command timed out after {self.timeout + 5}s."])
-        finally:
-            if os.path.exists(script_path):
-                os.remove(script_path)
-
-class ValidationPipeline:
-    def __init__(self, use_pylint: bool = False):
-        self.static_validators: List[BaseValidator] = [
-            SyntaxValidator(),
-            CustomLinterValidator() # Replaced Flake8Validator
-        ]
-        self.execution_validator = SafeExecutionValidator()
-
-    def validate(self, code: str, tests: List[str]) -> ValidationResult:
-        for validator in self.static_validators:
-            result = validator.validate(code=code)
-            if not result.valid: return result
-        
         return self.execution_validator.validate(code=code, tests=tests)
